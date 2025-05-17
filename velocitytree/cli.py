@@ -474,10 +474,33 @@ def create(ctx, name, template, edit):
 @click.argument('name')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed output')
 @click.option('--dry-run', is_flag=True, help='Show what would be done without executing')
+@click.option('--var', '-V', multiple=True, help='Set a global variable (format: key=value)')
+@click.option('--var-file', type=click.Path(exists=True), help='Load variables from JSON file')
 @click.pass_context
-def run(ctx, name, verbose, dry_run):
+def run(ctx, name, verbose, dry_run, var, var_file):
     """Run a workflow."""
     manager = WorkflowManager(config=ctx.obj['config'])
+    
+    # Parse global variables
+    global_vars = {}
+    
+    # Load from file if specified
+    if var_file:
+        import json
+        with open(var_file, 'r') as f:
+            global_vars.update(json.load(f))
+    
+    # Parse command-line variables
+    for var_def in var:
+        if '=' in var_def:
+            key, value = var_def.split('=', 1)
+            # Try to parse value as JSON for complex types
+            try:
+                import json
+                value = json.loads(value)
+            except:
+                pass  # Keep as string
+            global_vars[key] = value
     
     try:
         if dry_run:
@@ -495,7 +518,7 @@ def run(ctx, name, verbose, dry_run):
             return
         
         with console.status(f"Running workflow '{name}'...") as status:
-            result = manager.run_workflow(name)
+            result = manager.run_workflow(name, global_vars=global_vars)
             
         if result['status'] == 'success':
             console.print(f"[green]✓[/green] Workflow completed successfully")
@@ -540,6 +563,92 @@ def show(ctx, name):
     """Show workflow details."""
     manager = WorkflowManager(config=ctx.obj['config'])
     manager.show_workflow_details(name)
+
+
+@workflow.group()
+def variables():
+    """Manage workflow variables."""
+    pass
+
+
+@variables.command('list')
+@click.option('--scope', '-s', help='Variable scope to list')
+@click.pass_context
+def list_variables(ctx):
+    """List stored workflow variables."""
+    from .workflow_context import VariableStore
+    
+    store = VariableStore()
+    variables = store.list_variables(scope=ctx.invoked_subcommand)
+    
+    if not variables:
+        console.print("[yellow]No variables found.[/yellow]")
+        return
+    
+    table = Table(title="Workflow Variables")
+    table.add_column("Scope", style="cyan")
+    table.add_column("Name", style="yellow")
+    table.add_column("Value", style="green")
+    
+    for scope, vars in variables.items():
+        for name, value in vars.items():
+            table.add_row(scope, name, str(value))
+    
+    console.print(table)
+
+
+@variables.command('set')
+@click.argument('name')
+@click.argument('value')
+@click.option('--scope', '-s', default='global', help='Variable scope')
+@click.pass_context
+def set_variable(ctx, name, value, scope):
+    """Set a workflow variable."""
+    from .workflow_context import VariableStore
+    import json
+    
+    store = VariableStore()
+    
+    # Try to parse value as JSON
+    try:
+        parsed_value = json.loads(value)
+    except:
+        parsed_value = value
+    
+    store.set(name, parsed_value, scope)
+    console.print(f"[green]✓[/green] Variable '{name}' set in scope '{scope}'")
+
+
+@variables.command('get')
+@click.argument('name')
+@click.option('--scope', '-s', default='global', help='Variable scope')
+@click.pass_context
+def get_variable(ctx, name, scope):
+    """Get a workflow variable."""
+    from .workflow_context import VariableStore
+    
+    store = VariableStore()
+    value = store.get(name, scope)
+    
+    if value is None:
+        console.print(f"[yellow]Variable '{name}' not found in scope '{scope}'[/yellow]")
+    else:
+        console.print(f"{name} = {value}")
+
+
+@variables.command('delete')
+@click.argument('name')
+@click.option('--scope', '-s', default='global', help='Variable scope')
+@click.pass_context
+def delete_variable(ctx, name, scope):
+    """Delete a workflow variable."""
+    from .workflow_context import VariableStore
+    
+    store = VariableStore()
+    if store.delete(name, scope):
+        console.print(f"[green]✓[/green] Variable '{name}' deleted from scope '{scope}'")
+    else:
+        console.print(f"[yellow]Variable '{name}' not found in scope '{scope}'[/yellow]")
 
 
 @cli.group()

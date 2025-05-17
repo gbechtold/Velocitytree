@@ -17,6 +17,7 @@ from .utils import logger, run_command, ensure_directory
 from .core import TreeFlattener, ContextManager
 from .ai import AIAssistant
 from .templates import WORKFLOW_TEMPLATES
+from .workflow_context import WorkflowContext, VariableStore
 
 console = Console()
 
@@ -35,8 +36,11 @@ class WorkflowStep:
         self.condition = config.get('condition')
         self.timeout = config.get('timeout', 300)  # 5 minutes default
     
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: WorkflowContext) -> Dict[str, Any]:
         """Execute the workflow step."""
+        # Set current step in context
+        context.current_step = self.name
+        
         # Check condition if specified
         if self.condition:
             if not self._evaluate_condition(self.condition, context):
@@ -64,14 +68,14 @@ class WorkflowStep:
                 }
             raise
     
-    def _execute_command(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_command(self, context: WorkflowContext) -> Dict[str, Any]:
         """Execute a shell command."""
-        command = self._interpolate_string(self.command, context)
+        command = context.interpolate_string(self.command)
         
         # Set up environment
         env = os.environ.copy()
         for key, value in self.env.items():
-            env[key] = self._interpolate_string(str(value), context)
+            env[key] = context.interpolate_string(str(value))
         
         # Run command
         result = subprocess.run(
@@ -92,9 +96,15 @@ class WorkflowStep:
             'output': result.stdout
         }
     
-    def _execute_python(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_python(self, context: WorkflowContext) -> Dict[str, Any]:
         """Execute Python code."""
-        code = self._interpolate_string(self.command, context)
+        code = context.interpolate_string(self.command)
+        
+        # Capture output
+        from io import StringIO
+        import sys
+        old_stdout = sys.stdout
+        sys.stdout = output_buffer = StringIO()
         
         # Create a sandboxed environment
         globals_dict = {
@@ -105,18 +115,25 @@ class WorkflowStep:
         
         try:
             exec(code, globals_dict)
+            captured_output = output_buffer.getvalue()
             return {
                 'status': 'success',
-                'output': globals_dict.get('output', '')
+                'output': captured_output or globals_dict.get('output', ''),
+                'stdout': captured_output,
+                'stderr': ''
             }
         except Exception as e:
             return {
                 'status': 'error',
                 'error': str(e),
-                'output': ''
+                'output': '',
+                'stdout': '',
+                'stderr': str(e)
             }
+        finally:
+            sys.stdout = old_stdout
     
-    def _execute_velocitytree_command(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_velocitytree_command(self, context: WorkflowContext) -> Dict[str, Any]:
         """Execute a Velocitytree command."""
         command = self.command
         args = self.args
@@ -148,35 +165,15 @@ class WorkflowStep:
         else:
             raise ValueError(f"Unknown Velocitytree command: {command}")
     
-    def _interpolate_string(self, template: str, context: Dict[str, Any]) -> str:
+    def _interpolate_string(self, template: str, context: WorkflowContext) -> str:
         """Interpolate variables in a string."""
-        # Simple variable replacement
-        import re
-        
-        def replace_var(match):
-            var_path = match.group(1)
-            value = context
-            
-            for key in var_path.split('.'):
-                if isinstance(value, dict) and key in value:
-                    value = value[key]
-                else:
-                    return match.group(0)  # Return unchanged if not found
-            
-            return str(value)
-        
-        return re.sub(r'\{\{(.+?)\}\}', replace_var, template)
+        # Use context's interpolation method
+        return context.interpolate_string(template)
     
-    def _evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:
+    def _evaluate_condition(self, condition: str, context: WorkflowContext) -> bool:
         """Evaluate a condition."""
-        # Simple condition evaluation
-        # TODO: Implement more sophisticated condition parsing
-        interpolated = self._interpolate_string(condition, context)
-        
-        try:
-            return eval(interpolated, {'context': context})
-        except Exception:
-            return False
+        # Use context's evaluation method
+        return bool(context.evaluate_expression(condition))
 
 
 class Workflow:
@@ -190,16 +187,20 @@ class Workflow:
         self.on_error = config.get('on_error', 'stop')  # stop, continue, or cleanup
         self.cleanup_steps = [WorkflowStep(step) for step in config.get('cleanup', [])]
     
-    def execute(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def execute(self, context: Optional[WorkflowContext] = None) -> Dict[str, Any]:
         """Execute the workflow."""
-        context = context or {}
+        if context is None:
+            context = WorkflowContext()
         
         # Add workflow metadata to context
-        context['workflow'] = {
-            'name': self.name,
-            'start_time': datetime.now().isoformat(),
-            'status': 'running'
-        }
+        context.update_metadata(
+            name=self.name,
+            status='running'
+        )
+        
+        # Set global environment variables
+        for key, value in self.env.items():
+            context.set_global_var(key, value)
         
         results = []
         error_occurred = False
@@ -219,7 +220,9 @@ class Workflow:
                     })
                     
                     # Update context with step results
-                    context[f'step_{i}'] = result
+                    context.set_step_output(f'step_{i}', result)
+                    context.set_step_output(step.name, result)
+                    context.update_metadata(steps_completed=i+1)
                     
                     progress.update(task, advance=1)
                     
@@ -229,6 +232,7 @@ class Workflow:
                         
                 except Exception as e:
                     error_occurred = True
+                    context.add_error(str(e))
                     results.append({
                         'step': i,
                         'name': step.name,
@@ -251,14 +255,16 @@ class Workflow:
                     logger.error(f"Cleanup step failed: {e}")
         
         # Update workflow status
-        context['workflow']['end_time'] = datetime.now().isoformat()
-        context['workflow']['status'] = 'error' if error_occurred else 'success'
+        context.update_metadata(
+            end_time=datetime.now(),
+            status='error' if error_occurred else 'success'
+        )
         
         return {
             'workflow': self.name,
-            'status': context['workflow']['status'],
+            'status': context.workflow_metadata['status'],
             'results': results,
-            'context': context
+            'context': context.to_dict()
         }
 
 
@@ -358,12 +364,16 @@ class WorkflowManager:
         """Get a workflow by name."""
         return self.workflows.get(name)
     
-    def run_workflow(self, name: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def run_workflow(self, name: str, context: Optional[WorkflowContext] = None, global_vars: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Run a workflow."""
         workflow = self.get_workflow(name)
         
         if not workflow:
             raise ValueError(f"Workflow not found: {name}")
+        
+        # Create context if not provided
+        if context is None:
+            context = WorkflowContext(global_vars=global_vars)
         
         logger.info(f"Starting workflow: {name}")
         result = workflow.execute(context)
