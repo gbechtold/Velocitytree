@@ -40,6 +40,7 @@ class Plugin(ABC):
     
     def __init__(self, config: Optional[Config] = None):
         self.config = config
+        self.is_active = False
         if config:
             self.logger = logger.getChild(self.name)
         else:
@@ -48,11 +49,11 @@ class Plugin(ABC):
     @abstractmethod
     def activate(self):
         """Called when the plugin is activated."""
-        pass
+        self.is_active = True
     
     def deactivate(self):
         """Called when the plugin is deactivated."""
-        pass
+        self.is_active = False
     
     def register_commands(self, cli):
         """Register CLI commands for this plugin."""
@@ -61,6 +62,15 @@ class Plugin(ABC):
     def register_hooks(self, hook_manager):
         """Register hooks for this plugin."""
         pass
+    
+    def get_health_status(self) -> Dict[str, Any]:
+        """Get the health status of the plugin."""
+        return {
+            'name': self.name,
+            'version': self.version,
+            'active': self.is_active,
+            'status': 'healthy' if self.is_active else 'inactive'
+        }
 
 
 class HookManager:

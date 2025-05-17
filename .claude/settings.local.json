@@ -19,14 +19,7 @@
       "Bash(python -m pytest tests/test_workflow_templates.py -v)",
       "Bash(python -m pytest tests/test_workflow_context.py -v)",
       "Bash(python:*)",
-      "Bash(pytest:*)",
-      "Bash(${VIRTUAL_ENV}/bin/python -m pytest tests/test_workflows.py::TestWorkflowStep::test_execute_conditional_block -xvs)",
-      "Bash(ls:*)",
-      "Bash(if [ -f .venv/bin/activate ])",
-      "Bash(then source .venv/bin/activate)",
-      "Bash(else python -m pytest tests/test_example_plugins.py -v)",
-      "Bash(fi)",
-      "Bash(velocitytree plugin:*)"
+      "Bash(chmod:*)"
     ],
     "deny": []
   }
