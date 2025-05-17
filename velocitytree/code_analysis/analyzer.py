@@ -27,6 +27,8 @@ from .models import (
 )
 from .language_adapters import get_language_adapter, BaseLanguageAdapter
 from .patterns import pattern_registry
+from .metrics import complexity_calculator
+from .security import SecurityAnalyzer
 from ..utils import logger
 
 
@@ -43,6 +45,7 @@ class CodeAnalyzer:
         self.language_adapters: Dict[LanguageSupport, BaseLanguageAdapter] = {}
         self._load_language_adapters()
         self.cache = {}  # Simple in-memory cache
+        self.security_analyzer = SecurityAnalyzer(config)
         
     def _load_language_adapters(self):
         """Load language-specific analyzers."""
@@ -104,6 +107,26 @@ class CodeAnalyzer:
             # Check common issues
             issues = self._check_common_issues(module_analysis, content)
             module_analysis.issues.extend(issues)
+            
+            # Security analysis
+            security_result = self.security_analyzer.analyze_file(file_path)
+            if security_result and security_result['vulnerabilities']:
+                # Store security vulnerabilities in module analysis
+                if hasattr(module_analysis, 'vulnerabilities'):
+                    module_analysis.vulnerabilities = security_result['vulnerabilities']
+                else:
+                    # Add vulnerabilities as issues for now
+                    for vuln in security_result['vulnerabilities']:
+                        issue = CodeIssue(
+                            severity=Severity[vuln.severity.value.upper()],
+                            category=IssueCategory.SECURITY,
+                            message=vuln.description,
+                            rule_id=f"security-{vuln.type}",
+                            location=vuln.location,
+                            suggestion=vuln.fix_suggestion,
+                            confidence=vuln.confidence
+                        )
+                        module_analysis.issues.append(issue)
             
             # Cache result
             self.cache[cache_key] = (module_analysis, time.time())
@@ -252,106 +275,8 @@ class CodeAnalyzer:
     
     def _calculate_metrics(self, module: ModuleAnalysis, content: str) -> CodeMetrics:
         """Calculate code metrics for a module."""
-        lines = content.splitlines()
-        lines_of_code = len([line for line in lines if line.strip()])
-        lines_of_comments = self._count_comment_lines(content, module.language)
-        
-        # Calculate complexity metrics
-        cyclomatic_complexity = self._calculate_cyclomatic_complexity(module)
-        cognitive_complexity = self._calculate_cognitive_complexity(module)
-        
-        # Calculate maintainability index
-        # MI = 171 - 5.2 * ln(HV) - 0.23 * CC - 16.2 * ln(LOC)
-        # Simplified version
-        import math
-        halstead_volume = lines_of_code * 10  # Simplified
-        maintainability_index = max(0, min(100, 
-            171 - 5.2 * math.log(halstead_volume + 1) 
-            - 0.23 * cyclomatic_complexity 
-            - 16.2 * math.log(lines_of_code + 1)
-        ))
-        
-        # Calculate other metrics
-        code_to_comment_ratio = lines_of_code / (lines_of_comments + 1)
-        
-        # Function metrics
-        all_functions = module.functions + [m for c in module.classes for m in c.methods]
-        if all_functions:
-            function_lengths = [f.location.line_end - f.location.line_start + 1 
-                              for f in all_functions]
-            average_function_length = sum(function_lengths) / len(function_lengths)
-            max_function_length = max(function_lengths)
-        else:
-            average_function_length = 0
-            max_function_length = 0
-        
-        return CodeMetrics(
-            lines_of_code=lines_of_code,
-            lines_of_comments=lines_of_comments,
-            cyclomatic_complexity=cyclomatic_complexity,
-            cognitive_complexity=cognitive_complexity,
-            maintainability_index=maintainability_index,
-            code_to_comment_ratio=code_to_comment_ratio,
-            average_function_length=average_function_length,
-            max_function_length=max_function_length,
-            number_of_functions=len(module.functions),
-            number_of_classes=len(module.classes)
-        )
-    
-    def _count_comment_lines(self, content: str, language: LanguageSupport) -> int:
-        """Count comment lines in code."""
-        if language == LanguageSupport.PYTHON:
-            # Count lines starting with # and docstrings
-            lines = content.splitlines()
-            comment_lines = 0
-            in_docstring = False
-            docstring_char = None
-            
-            for line in lines:
-                stripped = line.strip()
-                if stripped.startswith('#'):
-                    comment_lines += 1
-                elif stripped.startswith('"""') or stripped.startswith("'''"):
-                    if not in_docstring:
-                        in_docstring = True
-                        docstring_char = stripped[:3]
-                    elif stripped.endswith(docstring_char):
-                        in_docstring = False
-                    comment_lines += 1
-                elif in_docstring:
-                    comment_lines += 1
-            
-            return comment_lines
-        else:
-            # Simple approximation for other languages
-            return len([line for line in content.splitlines() 
-                       if line.strip().startswith('//') or line.strip().startswith('/*')])
-    
-    def _calculate_cyclomatic_complexity(self, module: ModuleAnalysis) -> float:
-        """Calculate cyclomatic complexity for a module."""
-        total_complexity = 0
-        
-        # Add complexity for each function
-        for func in module.functions:
-            total_complexity += func.complexity
-        
-        # Add complexity for methods in classes
-        for cls in module.classes:
-            for method in cls.methods:
-                total_complexity += method.complexity
-        
-        # Average complexity
-        total_functions = len(module.functions) + sum(len(c.methods) for c in module.classes)
-        if total_functions == 0:
-            return 1  # Base complexity
-        
-        return total_complexity / total_functions
-    
-    def _calculate_cognitive_complexity(self, module: ModuleAnalysis) -> float:
-        """Calculate cognitive complexity (simplified version)."""
-        # This is a simplified version - real cognitive complexity
-        # requires deeper AST analysis
-        return self._calculate_cyclomatic_complexity(module) * 1.2
+        # Use the advanced metrics calculator
+        return complexity_calculator.calculate_complexity_metrics(module, content)
     
     def _detect_patterns(self, module: ModuleAnalysis, content: str) -> List[Pattern]:
         """Detect design patterns and anti-patterns."""

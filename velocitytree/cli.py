@@ -290,6 +290,151 @@ def analyze(ctx, detailed, metrics, path):
 
 
 @cli.group()
+def code():
+    """Code analysis and quality commands."""
+    pass
+
+
+@code.command()
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--type', '-t', type=click.Choice(['security', 'quality', 'performance', 'complexity', 'all']), 
+              default='all', help='Type of analysis to perform')
+@click.option('--format', '-f', type=click.Choice(['text', 'json', 'report']), 
+              default='text', help='Output format')
+@click.option('--severity', '-s', type=click.Choice(['low', 'medium', 'high', 'critical']), 
+              help='Minimum severity level to report')
+@click.pass_context
+def analyze(ctx, path, type, format, severity):
+    """Analyze code for security vulnerabilities and quality issues."""
+    from pathlib import Path
+    from .code_analysis.analyzer import CodeAnalyzer
+    from .code_analysis.security import SecurityAnalyzer
+    from .code_analysis.models import SeverityLevel, IssueCategory
+    import json
+    
+    path = Path(path)
+    console.print(f"[blue]Analyzing: {path}[/blue]")
+    
+    try:
+        if type == 'security':
+            # Security-only analysis
+            analyzer = SecurityAnalyzer()
+            
+            if path.is_file():
+                result = analyzer.analyze_file(path)
+                vulnerabilities = result['vulnerabilities']
+            else:
+                result = analyzer.analyze_directory(path)
+                vulnerabilities = result['vulnerabilities']
+            
+            # Filter by severity if specified
+            if severity:
+                min_severity = SeverityLevel[severity.upper()]
+                severity_order = [SeverityLevel.LOW, SeverityLevel.MEDIUM, 
+                                SeverityLevel.HIGH, SeverityLevel.CRITICAL]
+                min_index = severity_order.index(min_severity)
+                vulnerabilities = [v for v in vulnerabilities 
+                                 if severity_order.index(v.severity) >= min_index]
+            
+            # Display results
+            if format == 'json':
+                output = {
+                    'vulnerabilities': [
+                        {
+                            'type': v.type,
+                            'severity': v.severity.value,
+                            'category': v.category.value,
+                            'description': v.description,
+                            'location': {
+                                'file': v.location.file_path,
+                                'line': v.location.line_start,
+                                'column': v.location.column_start,
+                            },
+                            'fix_suggestion': v.fix_suggestion,
+                            'confidence': v.confidence,
+                        }
+                        for v in vulnerabilities
+                    ],
+                    'summary': result['summary']
+                }
+                console.print(json.dumps(output, indent=2))
+            else:
+                if vulnerabilities:
+                    console.print(f"\n[red]Found {len(vulnerabilities)} security vulnerabilities:[/red]")
+                    
+                    # Group by severity
+                    by_severity = {}
+                    for v in vulnerabilities:
+                        by_severity.setdefault(v.severity.value, []).append(v)
+                    
+                    for severity in ['critical', 'high', 'medium', 'low']:
+                        if severity in by_severity:
+                            console.print(f"\n[bold]{severity.upper()}:[/bold]")
+                            for v in by_severity[severity]:
+                                console.print(f"  • {v.description}")
+                                console.print(f"    Location: {v.location.file_path}:{v.location.line_start}")
+                                console.print(f"    Fix: {v.fix_suggestion}")
+                else:
+                    console.print("[green]✓[/green] No security vulnerabilities found!")
+                
+                console.print(f"\n[blue]Security Score: {result['summary']['security_score']:.1f}/100[/blue]")
+                
+        else:
+            # Full code analysis
+            analyzer = CodeAnalyzer()
+            
+            if path.is_file():
+                result = analyzer.analyze_file(path)
+                if result:
+                    console.print(f"\n[green]Analysis of {path.name}:[/green]")
+                    
+                    # Display issues
+                    if result.issues:
+                        console.print(f"\n[yellow]Issues found: {len(result.issues)}[/yellow]")
+                        
+                        # Group by category
+                        by_category = {}
+                        for issue in result.issues:
+                            by_category.setdefault(issue.category.value, []).append(issue)
+                        
+                        for category, issues in by_category.items():
+                            console.print(f"\n[bold]{category.upper()}:[/bold]")
+                            for issue in issues:
+                                console.print(f"  • {issue.message}")
+                                console.print(f"    Location: {issue.location.file_path}:{issue.location.line_start}")
+                                if issue.suggestion:
+                                    console.print(f"    Fix: {issue.suggestion}")
+                    
+                    # Display metrics
+                    if result.metrics:
+                        console.print(f"\n[blue]Metrics:[/blue]")
+                        console.print(f"  Lines of code: {result.metrics.lines_of_code}")
+                        console.print(f"  Cyclomatic complexity: {result.metrics.cyclomatic_complexity:.1f}")
+                        console.print(f"  Maintainability index: {result.metrics.maintainability_index:.1f}")
+                else:
+                    console.print("[red]Analysis failed[/red]")
+            else:
+                result = analyzer.analyze_directory(path)
+                console.print(f"\n[green]Analysis Results:[/green]")
+                console.print(f"Files analyzed: {result.files_analyzed}")
+                console.print(f"Total lines: {result.total_lines}")
+                console.print(f"Total issues: {len(result.all_issues)}")
+                
+                # Show breakdown by severity
+                severity_counts = {}
+                for issue in result.all_issues:
+                    severity_counts[issue.severity.value] = severity_counts.get(issue.severity.value, 0) + 1
+                
+                console.print("\n[yellow]Issues by severity:[/yellow]")
+                for severity, count in severity_counts.items():
+                    console.print(f"  {severity}: {count}")
+                
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Code analysis error: {e}", exc_info=True)
+
+
+@cli.group()
 def ai():
     """AI assistant commands."""
     pass

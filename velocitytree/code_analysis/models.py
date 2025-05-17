@@ -46,6 +46,26 @@ class LanguageSupport(Enum):
     RUBY = "ruby"
 
 
+class SeverityLevel(Enum):
+    """Severity levels for vulnerabilities."""
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    
+
+class SecurityCategory(Enum):
+    """Categories of security vulnerabilities."""
+    INJECTION = "injection"
+    AUTHENTICATION = "authentication"
+    AUTHORIZATION = "authorization"
+    DATA_EXPOSURE = "data_exposure"
+    CONFIGURATION = "configuration"
+    CRYPTOGRAPHY = "cryptography"
+    INPUT_VALIDATION = "input_validation"
+    PATH_TRAVERSAL = "path_traversal"
+
+
 @dataclass
 class CodeLocation:
     """Location in source code."""
@@ -171,6 +191,20 @@ class AnalysisResult:
     error_files: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
+
+@dataclass
+class VulnerabilityInfo:
+    """Information about a security vulnerability."""
+    type: str
+    severity: SeverityLevel
+    category: SecurityCategory
+    description: str
+    location: CodeLocation
+    code_snippet: str
+    fix_suggestion: str
+    references: List[str] = field(default_factory=list)
+    confidence: float = 0.8
+    
 
 @dataclass
 class CodebaseProfile:
