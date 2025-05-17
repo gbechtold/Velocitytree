@@ -71,6 +71,6 @@ Working on: **Step 4 - Workflow System**
    - PR: Ready for review
    
 ### Active Tickets
-4. `FEAT-004`: Implement parallel workflow execution
-   - Status: Not started
-   - Branch: TBD
+5. `FEAT-005`: Create plugin discovery mechanism
+   - Status: In Progress
+   - Branch: feat-005-plugin-discovery
