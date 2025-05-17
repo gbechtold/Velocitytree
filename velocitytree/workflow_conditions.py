@@ -1,362 +1,94 @@
-"""Workflow condition evaluation for Velocitytree."""
+"""
+Advanced conditional expressions for workflows.
+"""
 
-import ast
 import re
-from typing import Any, Union, List, Optional
-from enum import Enum, auto
+from typing import Any, Dict, List, Optional, Union
+from dataclasses import dataclass
+from enum import Enum
 
 from .workflow_context import WorkflowContext
 
 
 class ConditionOperator(Enum):
-    """Supported condition operators."""
-    AND = auto()
-    OR = auto()
-    NOT = auto()
-    EQ = auto()
-    NE = auto()
-    LT = auto()
-    LE = auto()
-    GT = auto()
-    GE = auto()
-    IN = auto()
-    NOT_IN = auto()
-    MATCHES = auto()
-    CONTAINS = auto()
-    VALUE = auto()
+    """Logical operators for conditions."""
+    AND = "and"
+    OR = "or"
+    NOT = "not"
+    EQUALS = "=="
+    NOT_EQUALS = "!="
+    GREATER_THAN = ">"
+    LESS_THAN = "<"
+    GREATER_EQUAL = ">="
+    LESS_EQUAL = "<="
+    IN = "in"
+    NOT_IN = "not in"
+    CONTAINS = "contains"
+    MATCHES = "matches"  # regex match
+    TRUE = "true"
+    FALSE = "false"
 
 
+@dataclass
 class ConditionNode:
-    """A node in the condition AST."""
-    def __init__(self, operator: ConditionOperator, 
-                 left: Optional['ConditionNode'] = None,
-                 right: Optional['ConditionNode'] = None,
-                 value: Any = None):
-        self.operator = operator
-        self.left = left
-        self.right = right
-        self.value = value
-
-
-class ConditionParser:
-    """Parses condition strings into an AST."""
+    """A node in the condition expression tree."""
+    operator: Optional[ConditionOperator] = None
+    left: Optional[Union['ConditionNode', str]] = None
+    right: Optional[Union['ConditionNode', str]] = None
+    value: Optional[Any] = None
     
-    # Operator mapping
-    OPERATORS = {
-        'and': ConditionOperator.AND,
-        '&&': ConditionOperator.AND,
-        'or': ConditionOperator.OR,
-        '||': ConditionOperator.OR,
-        'not': ConditionOperator.NOT,
-        '!': ConditionOperator.NOT,
-        '==': ConditionOperator.EQ,
-        '!=': ConditionOperator.NE,
-        '<': ConditionOperator.LT,
-        '<=': ConditionOperator.LE,
-        '>': ConditionOperator.GT,
-        '>=': ConditionOperator.GE,
-        'in': ConditionOperator.IN,
-        'not in': ConditionOperator.NOT_IN,
-        'matches': ConditionOperator.MATCHES,
-        'contains': ConditionOperator.CONTAINS,
-    }
-    
-    def parse(self, condition: str) -> ConditionNode:
-        """Parse a condition string into an AST."""
-        # Pre-process the condition
-        condition = self._preprocess_condition(condition)
-        
-        # Try to parse as Python expression
-        try:
-            tree = ast.parse(condition, mode='eval')
-            return self._ast_to_condition_node(tree.body)
-        except SyntaxError:
-            # Fall back to simple parsing for basic conditions
-            return self._parse_simple_condition(condition)
-    
-    def _preprocess_condition(self, condition: str) -> str:
-        """Pre-process condition string for parsing."""
-        # Replace 'not in' with a temporary placeholder to avoid parsing issues
-        condition = condition.replace('not in', '__NOT_IN__')
-        
-        # Replace logical operators with Python equivalents
-        replacements = {
-            '&&': ' and ',
-            '||': ' or ',
-            '!': ' not ',
-        }
-        
-        for old, new in replacements.items():
-            condition = condition.replace(old, new)
-        
-        # Replace the placeholder back
-        condition = condition.replace('__NOT_IN__', 'not in')
-        
-        return condition
-    
-    def _ast_to_condition_node(self, node: ast.expr) -> ConditionNode:
-        """Convert Python AST node to ConditionNode."""
-        if isinstance(node, ast.BoolOp):
-            # Boolean operations (and, or)
-            if isinstance(node.op, ast.And):
-                op = ConditionOperator.AND
-            elif isinstance(node.op, ast.Or):
-                op = ConditionOperator.OR
-            else:
-                raise ValueError(f"Unsupported boolean operator: {node.op}")
-            
-            # Create a tree from the values
-            result = self._ast_to_condition_node(node.values[0])
-            for value in node.values[1:]:
-                result = ConditionNode(
-                    operator=op,
-                    left=result,
-                    right=self._ast_to_condition_node(value)
-                )
-            return result
-        
-        elif isinstance(node, ast.UnaryOp):
-            # Unary operations (not)
-            if isinstance(node.op, ast.Not):
-                return ConditionNode(
-                    operator=ConditionOperator.NOT,
-                    left=self._ast_to_condition_node(node.operand)
-                )
-            else:
-                raise ValueError(f"Unsupported unary operator: {node.op}")
-        
-        elif isinstance(node, ast.Compare):
-            # Comparison operations
-            left = self._ast_to_condition_node(node.left)
-            
-            for i, (op, right_node) in enumerate(zip(node.ops, node.comparators)):
-                right = self._ast_to_condition_node(right_node)
-                
-                if isinstance(op, ast.Eq):
-                    op_type = ConditionOperator.EQ
-                elif isinstance(op, ast.NotEq):
-                    op_type = ConditionOperator.NE
-                elif isinstance(op, ast.Lt):
-                    op_type = ConditionOperator.LT
-                elif isinstance(op, ast.LtE):
-                    op_type = ConditionOperator.LE
-                elif isinstance(op, ast.Gt):
-                    op_type = ConditionOperator.GT
-                elif isinstance(op, ast.GtE):
-                    op_type = ConditionOperator.GE
-                elif isinstance(op, ast.In):
-                    op_type = ConditionOperator.IN
-                elif isinstance(op, ast.NotIn):
-                    op_type = ConditionOperator.NOT_IN
-                else:
-                    raise ValueError(f"Unsupported comparison operator: {op}")
-                
-                result = ConditionNode(operator=op_type, left=left, right=right)
-                
-                # Chain multiple comparisons
-                if i < len(node.ops) - 1:
-                    left = right
-                    result = ConditionNode(
-                        operator=ConditionOperator.AND,
-                        left=result,
-                        right=None  # Will be set in next iteration
-                    )
-            
-            return result
-        
-        elif isinstance(node, ast.Name):
-            # Variable reference
-            return ConditionNode(operator=ConditionOperator.VALUE, value=node.id)
-        
-        elif isinstance(node, ast.Constant):
-            # Literal value
-            return ConditionNode(operator=ConditionOperator.VALUE, value=node.value)
-        
-        elif isinstance(node, ast.Attribute):
-            # Attribute access (e.g., obj.attr)
-            obj = self._ast_to_condition_node(node.value)
-            return ConditionNode(
-                operator=ConditionOperator.VALUE,
-                value=f"{obj.value}.{node.attr}"
-            )
-        
-        elif isinstance(node, ast.BinOp):
-            # Binary operations (for arithmetic if needed)
-            left = self._ast_to_condition_node(node.left)
-            right = self._ast_to_condition_node(node.right)
-            # For now, just return the left value (simplified)
-            return left
-        
-        else:
-            raise ValueError(f"Unsupported AST node type: {type(node)}")
-    
-    def _parse_simple_condition(self, condition: str) -> ConditionNode:
-        """Parse simple conditions that don't parse as Python expressions."""
-        # Handle custom operators like 'matches' and 'contains'
-        patterns = [
-            (r'(.+?)\s+matches\s+["\'](.+?)["\']', ConditionOperator.MATCHES),
-            (r'(.+?)\s+contains\s+(.+)', ConditionOperator.CONTAINS),
-        ]
-        
-        for pattern, op in patterns:
-            match = re.match(pattern, condition.strip())
-            if match:
-                left_val = match.group(1).strip()
-                right_val = match.group(2).strip()
-                
-                left = ConditionNode(operator=ConditionOperator.VALUE, value=left_val)
-                right = ConditionNode(operator=ConditionOperator.VALUE, value=right_val)
-                
-                return ConditionNode(operator=op, left=left, right=right)
-        
-        # Fall back to treating the whole thing as a value
-        return ConditionNode(operator=ConditionOperator.VALUE, value=condition)
-
-
-class ConditionEvaluator:
-    """Evaluates condition ASTs against a context."""
-    
-    def __init__(self, context: WorkflowContext):
-        self.context = context
-    
-    def evaluate(self, node: ConditionNode) -> Any:
-        """Evaluate a condition node."""
-        if node.operator == ConditionOperator.VALUE:
-            return self._resolve_value(node.value)
-        
-        elif node.operator == ConditionOperator.AND:
-            left_result = self.evaluate(node.left)
-            # Short-circuit evaluation
-            if not left_result:
-                return False
-            return bool(self.evaluate(node.right))
-        
-        elif node.operator == ConditionOperator.OR:
-            left_result = self.evaluate(node.left)
-            # Short-circuit evaluation
-            if left_result:
-                return True
-            return bool(self.evaluate(node.right))
-        
-        elif node.operator == ConditionOperator.NOT:
-            return not self.evaluate(node.left)
-        
-        # Binary operators
-        left = self.evaluate(node.left)
-        right = self.evaluate(node.right)
-        
-        if node.operator == ConditionOperator.EQ:
-            return self._compare_values(left, right, lambda a, b: a == b)
-        elif node.operator == ConditionOperator.NE:
-            return self._compare_values(left, right, lambda a, b: a != b)
-        elif node.operator == ConditionOperator.LT:
-            return self._compare_values(left, right, lambda a, b: a < b)
-        elif node.operator == ConditionOperator.LE:
-            return self._compare_values(left, right, lambda a, b: a <= b)
-        elif node.operator == ConditionOperator.GT:
-            return self._compare_values(left, right, lambda a, b: a > b)
-        elif node.operator == ConditionOperator.GE:
-            return self._compare_values(left, right, lambda a, b: a >= b)
-        elif node.operator == ConditionOperator.IN:
-            return left in right
-        elif node.operator == ConditionOperator.NOT_IN:
-            return left not in right
-        elif node.operator == ConditionOperator.MATCHES:
-            # Regex matching
-            import re
-            pattern = str(right)
-            text = str(left)
-            return bool(re.match(pattern, text))
-        elif node.operator == ConditionOperator.CONTAINS:
-            return str(right) in str(left)
-        else:
-            raise ValueError(f"Unknown operator: {node.operator}")
-    
-    def _resolve_value(self, value: Any) -> Any:
-        """Resolve a value from the context."""
-        if isinstance(value, str):
-            # Check if it's a template variable
-            if value.startswith('{{') and value.endswith('}}'):
-                return self.context.interpolate_string(value)
-            
-            # Check if it's a variable path (e.g., "steps.previous.status")
-            if '.' in value:
-                parts = value.split('.')
-                current = None
-                
-                # Start from context globals or steps
-                if parts[0] == 'steps':
-                    current = self.context.step_outputs
-                    parts = parts[1:]
-                elif parts[0] == 'workflow':
-                    current = self.context.workflow_metadata
-                    parts = parts[1:]
-                else:
-                    # Try to get from global vars first
-                    current = self.context.global_vars.get(parts[0])
-                    if current is None:
-                        # Try from step outputs
-                        current = self.context.step_outputs.get(parts[0])
-                    parts = parts[1:]
-                
-                # Navigate through the path
-                for part in parts:
-                    if current is None:
-                        break
-                    if isinstance(current, dict):
-                        current = current.get(part)
-                    else:
-                        current = getattr(current, part, None)
-                
-                if current is not None:
-                    return current
-            
-            # Try to resolve as a simple variable
-            # First try string interpolation (for backward compatibility)
-            interpolated = self.context.interpolate_string(f"{{{{{value}}}}}")
-            if interpolated != f"{{{{{value}}}}}":
-                return self._normalize_value(interpolated)
-            
-            # Then try direct lookup
-            if value in self.context.global_vars:
-                return self.context.global_vars[value]
-            if value in self.context.step_outputs:
-                return self.context.step_outputs[value]
-            
-            # Return the string value itself
-            return self._normalize_value(value)
-        
-        return value
-    
-    def _normalize_value(self, value: str) -> Any:
-        """Normalize string values to proper types."""
-        # Handle boolean strings
-        if value.lower() in ('true', 'yes', 'on'):
+    def evaluate(self, context: WorkflowContext) -> bool:
+        """Evaluate this condition node."""
+        if self.operator is None and self.value is not None:
+            # This is a simple value node
+            resolved = self._resolve_value(self.value, context)
+            return bool(resolved)
+        elif self.operator == ConditionOperator.TRUE:
             return True
-        elif value.lower() in ('false', 'no', 'off'):
+        elif self.operator == ConditionOperator.FALSE:
             return False
-        elif value.lower() in ('null', 'none'):
-            return None
+        elif self.operator == ConditionOperator.AND:
+            left_result = self._evaluate_operand(self.left, context)
+            right_result = self._evaluate_operand(self.right, context)
+            return left_result and right_result
+        elif self.operator == ConditionOperator.OR:
+            left_result = self._evaluate_operand(self.left, context)
+            right_result = self._evaluate_operand(self.right, context)
+            return left_result or right_result
+        elif self.operator == ConditionOperator.NOT:
+            return not self._evaluate_operand(self.left, context)
+        else:
+            # Binary comparison operators
+            left_value = self._resolve_value(self.left, context)
+            right_value = self._resolve_value(self.right, context)
+            
+            if self.operator == ConditionOperator.EQUALS:
+                return self._compare_values(left_value, right_value, lambda a, b: a == b)
+            elif self.operator == ConditionOperator.NOT_EQUALS:
+                return self._compare_values(left_value, right_value, lambda a, b: a != b)
+            elif self.operator == ConditionOperator.GREATER_THAN:
+                return self._compare_values(left_value, right_value, lambda a, b: a > b)
+            elif self.operator == ConditionOperator.LESS_THAN:
+                return self._compare_values(left_value, right_value, lambda a, b: a < b)
+            elif self.operator == ConditionOperator.GREATER_EQUAL:
+                return self._compare_values(left_value, right_value, lambda a, b: a >= b)
+            elif self.operator == ConditionOperator.LESS_EQUAL:
+                return self._compare_values(left_value, right_value, lambda a, b: a <= b)
+            elif self.operator == ConditionOperator.IN:
+                return left_value in right_value
+            elif self.operator == ConditionOperator.NOT_IN:
+                return left_value not in right_value
+            elif self.operator == ConditionOperator.CONTAINS:
+                return str(right_value) in str(left_value)
+            elif self.operator == ConditionOperator.MATCHES:
+                return bool(re.match(str(right_value), str(left_value)))
         
-        # Try to parse as number
-        try:
-            if '.' in value:
-                return float(value)
-            else:
-                return int(value)
-        except ValueError:
-            pass
-        
-        return value
+        return False
     
     def _compare_values(self, left: Any, right: Any, comparator) -> bool:
         """Compare values with type coercion."""
         # If types match, compare directly
         if type(left) == type(right):
-            return comparator(left, right)
-        
-        # Handle None comparisons
-        if left is None or right is None:
             return comparator(left, right)
         
         # Try to coerce types for comparison
@@ -369,46 +101,287 @@ class ConditionEvaluator:
         except (ValueError, TypeError):
             pass
         
-        # Try string comparison
-        try:
-            left_str = str(left).lower()
-            right_str = str(right).lower()
-            
-            # Special handling for boolean strings
-            if left_str in ('true', 'false') or right_str in ('true', 'false'):
-                left_bool = left_str == 'true' if left_str in ('true', 'false') else left
-                right_bool = right_str == 'true' if right_str in ('true', 'false') else right
-                return comparator(left_bool, right_bool)
-            
-            return comparator(left_str, right_str)
-        except:
-            pass
-        
         # Fall back to string comparison
         return comparator(str(left), str(right))
+    
+    def _evaluate_operand(self, operand: Union['ConditionNode', str], context: WorkflowContext) -> bool:
+        """Evaluate an operand (either a node or a value)."""
+        if isinstance(operand, ConditionNode):
+            return operand.evaluate(context)
+        else:
+            # Simple expression evaluation
+            return bool(context.evaluate_expression(str(operand)))
+    
+    def _resolve_value(self, value: Union['ConditionNode', str], context: WorkflowContext) -> Any:
+        """Resolve a value (interpolate variables, evaluate expressions)."""
+        if isinstance(value, ConditionNode):
+            return value.evaluate(context)
+        elif isinstance(value, str):
+            # First try to interpolate variables
+            interpolated = context.interpolate_string(value)
+            
+            # If interpolation changed the value, we got a variable value
+            if interpolated != value:
+                # For string operators (contains, matches), don't evaluate arithmetic
+                if self.operator in [ConditionOperator.CONTAINS, ConditionOperator.MATCHES]:
+                    return interpolated
+                    
+                # Try to evaluate the result
+                try:
+                    # Handle special string comparisons
+                    if interpolated.startswith('"') and interpolated.endswith('"'):
+                        return interpolated[1:-1]
+                    elif interpolated.startswith("'") and interpolated.endswith("'"):
+                        return interpolated[1:-1]
+                    else:
+                        # Don't evaluate arithmetic on strings that look like phone numbers, etc
+                        if isinstance(interpolated, str) and any(c in interpolated for c in '- /.'):
+                            return interpolated
+                        # Handle boolean comparison - convert Python bool representations to lowercase
+                        if interpolated in ['True', 'False']:
+                            return interpolated.lower()
+                        result = context.evaluate_expression(interpolated)
+                        return result if result is not None else interpolated
+                except:
+                    return interpolated
+            
+            # Check if it's a quoted string
+            if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                return value[1:-1]
+            
+            # For literals, return as-is without evaluation
+            return value
+        else:
+            return value
 
 
-def evaluate_condition(condition: str, context: WorkflowContext) -> bool:
-    """Evaluate a condition string against a workflow context."""
-    if not condition:
+class ConditionParser:
+    """Parse condition expressions into an AST."""
+    
+    def __init__(self):
+        self.operators = {
+            'and': ConditionOperator.AND,
+            'or': ConditionOperator.OR,
+            'not': ConditionOperator.NOT,
+            '==': ConditionOperator.EQUALS,
+            '!=': ConditionOperator.NOT_EQUALS,
+            '>': ConditionOperator.GREATER_THAN,
+            '<': ConditionOperator.LESS_THAN,
+            '>=': ConditionOperator.GREATER_EQUAL,
+            '<=': ConditionOperator.LESS_EQUAL,
+            'in': ConditionOperator.IN,
+            'not in': ConditionOperator.NOT_IN,
+            'contains': ConditionOperator.CONTAINS,
+            'matches': ConditionOperator.MATCHES,
+        }
+        # Order matters for parsing - longest first
+        self.ordered_operators = sorted(self.operators.items(), key=lambda x: -len(x[0]))
+    
+    def parse(self, expression: str) -> ConditionNode:
+        """Parse a condition expression into an AST."""
+        # Remove extra whitespace
+        expression = ' '.join(expression.split())
+        
+        # Handle special cases
+        if expression.lower() == 'true':
+            return ConditionNode(operator=ConditionOperator.TRUE)
+        elif expression.lower() == 'false':
+            return ConditionNode(operator=ConditionOperator.FALSE)
+        
+        # Parse the expression
+        return self._parse_or(expression)
+    
+    def _parse_or(self, expression: str) -> ConditionNode:
+        """Parse OR expressions."""
+        # Split on ' or ' not inside quotes or parentheses
+        parts = self._split_on_operator(expression, ' or ')
+        
+        if len(parts) == 1:
+            return self._parse_and(parts[0])
+        
+        # Build OR tree
+        left = self._parse_and(parts[0])
+        for part in parts[1:]:
+            right = self._parse_and(part)
+            left = ConditionNode(operator=ConditionOperator.OR, left=left, right=right)
+        
+        return left
+    
+    def _parse_and(self, expression: str) -> ConditionNode:
+        """Parse AND expressions."""
+        # Split on ' and ' not inside quotes or parentheses
+        parts = self._split_on_operator(expression, ' and ')
+        
+        if len(parts) == 1:
+            return self._parse_not(parts[0])
+        
+        # Build AND tree
+        left = self._parse_not(parts[0])
+        for part in parts[1:]:
+            right = self._parse_not(part)
+            left = ConditionNode(operator=ConditionOperator.AND, left=left, right=right)
+        
+        return left
+    
+    def _parse_not(self, expression: str) -> ConditionNode:
+        """Parse NOT expressions."""
+        expression = expression.strip()
+        
+        if expression.startswith('not '):
+            inner = expression[4:].strip()
+            if inner.startswith('(') and inner.endswith(')'):
+                inner = inner[1:-1]
+            return ConditionNode(operator=ConditionOperator.NOT, left=self._parse_or(inner))
+        
+        return self._parse_comparison(expression)
+    
+    def _parse_comparison(self, expression: str) -> ConditionNode:
+        """Parse comparison expressions."""
+        # Check for comparison operators
+        for op_text, op_enum in self.ordered_operators:
+            if op_text in ['and', 'or', 'not']:  # Skip logical operators
+                continue
+            
+            parts = self._split_on_operator(expression, op_text)
+            if len(parts) == 2:
+                return ConditionNode(
+                    operator=op_enum,
+                    left=parts[0].strip(),
+                    right=parts[1].strip()
+                )
+        
+        # Handle parentheses
+        if expression.startswith('(') and expression.endswith(')'):
+            return self._parse_or(expression[1:-1])
+        
+        # Return as a simple value/expression
+        return ConditionNode(value=expression)
+    
+    def _split_on_operator(self, expression: str, operator: str) -> List[str]:
+        """Split expression on operator, respecting quotes and parentheses."""
+        parts = []
+        current = ""
+        quote_char = None
+        paren_count = 0
+        i = 0
+        
+        while i < len(expression):
+            char = expression[i]
+            
+            # Handle quotes
+            if char in ['"', "'"] and paren_count == 0:
+                if quote_char is None:
+                    quote_char = char
+                elif quote_char == char:
+                    quote_char = None
+            
+            # Handle parentheses
+            elif char == '(' and quote_char is None:
+                paren_count += 1
+            elif char == ')' and quote_char is None:
+                paren_count -= 1
+            
+            # Check for operator
+            if (quote_char is None and paren_count == 0 and 
+                expression[i:i+len(operator)] == operator):
+                # Special handling for 'not in' to avoid splitting on 'not'
+                if operator == 'not' and i + 3 < len(expression) and expression[i:i+6] == 'not in':
+                    current += char
+                    i += 1
+                    continue
+                    
+                parts.append(current)
+                current = ""
+                i += len(operator)
+                continue
+            
+            current += char
+            i += 1
+        
+        if current:
+            parts.append(current)
+        
+        return parts if parts else [expression]
+
+
+class ConditionalStep:
+    """A conditional step that can contain multiple conditions and actions."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        self.conditions = []
+        self.then_steps = []
+        self.else_steps = []
+        
+        # Parse configuration
+        if 'if' in config:
+            self.conditions.append(config['if'])
+        elif 'when' in config:
+            self.conditions.append(config['when'])
+        
+        # Parse then/else blocks
+        if 'then' in config:
+            self.then_steps = config['then'] if isinstance(config['then'], list) else [config['then']]
+        
+        if 'else' in config:
+            self.else_steps = config['else'] if isinstance(config['else'], list) else [config['else']]
+    
+    def evaluate(self, context: WorkflowContext) -> bool:
+        """Evaluate if this conditional step should execute."""
+        parser = ConditionParser()
+        
+        for condition in self.conditions:
+            if isinstance(condition, str):
+                node = parser.parse(condition)
+                if not node.evaluate(context):
+                    return False
+            elif isinstance(condition, dict):
+                # Complex condition with multiple parts
+                for key, value in condition.items():
+                    expr = f"{key} == {value}"
+                    node = parser.parse(expr)
+                    if not node.evaluate(context):
+                        return False
+        
         return True
     
-    # Simple boolean check
-    if condition.lower() in ('true', 'yes', 'on'):
+    def get_steps_to_execute(self, context: WorkflowContext) -> List[Dict[str, Any]]:
+        """Get the steps to execute based on condition evaluation."""
+        if self.evaluate(context):
+            return self.then_steps
+        else:
+            return self.else_steps
+
+
+def evaluate_condition(condition: Union[str, Dict[str, Any]], context: WorkflowContext) -> bool:
+    """Evaluate a condition expression."""
+    if isinstance(condition, str):
+        parser = ConditionParser()
+        node = parser.parse(condition)
+        return node.evaluate(context)
+    elif isinstance(condition, dict):
+        # Dictionary-based conditions (all must be true)
+        for key, value in condition.items():
+            if key == 'all':
+                # All conditions must be true
+                for sub_condition in value:
+                    if not evaluate_condition(sub_condition, context):
+                        return False
+                return True
+            elif key == 'any':
+                # Any condition must be true
+                for sub_condition in value:
+                    if evaluate_condition(sub_condition, context):
+                        return True
+                return False
+            elif key == 'not':
+                # Negate the condition
+                return not evaluate_condition(value, context)
+            else:
+                # Key-value comparison
+                actual_value = context.resolve_variable(key)
+                if actual_value != value:
+                    return False
         return True
-    elif condition.lower() in ('false', 'no', 'off'):
-        return False
-    
-    # Parse and evaluate the condition
-    parser = ConditionParser()
-    evaluator = ConditionEvaluator(context)
-    
-    try:
-        ast = parser.parse(condition)
-        result = evaluator.evaluate(ast)
-        return bool(result)
-    except Exception as e:
-        # Log error and return False on evaluation failure
-        import logging
-        logging.error(f"Error evaluating condition '{condition}': {e}")
-        return False
+    else:
+        # Boolean value
+        return bool(condition)

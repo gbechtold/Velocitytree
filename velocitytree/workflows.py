@@ -18,6 +18,7 @@ from .core import TreeFlattener, ContextManager
 from .ai import AIAssistant
 from .templates import WORKFLOW_TEMPLATES
 from .workflow_context import WorkflowContext, VariableStore
+from .workflow_conditions import evaluate_condition, ConditionalStep
 
 console = Console()
 
@@ -36,6 +37,11 @@ class WorkflowStep:
         self.condition = config.get('condition')
         self.timeout = config.get('timeout', 300)  # 5 minutes default
         self.depends_on = config.get('depends_on', [])  # Dependencies for pipeline mode
+        
+        # Support for conditional step blocks
+        self.if_condition = config.get('if')
+        self.then_steps = config.get('then', [])
+        self.else_steps = config.get('else', [])
     
     def execute(self, context: WorkflowContext) -> Dict[str, Any]:
         """Execute the workflow step."""
@@ -44,12 +50,16 @@ class WorkflowStep:
         
         # Check condition if specified
         if self.condition:
-            if not self._evaluate_condition(self.condition, context):
+            if not evaluate_condition(self.condition, context):
                 return {
                     'status': 'skipped',
                     'reason': 'Condition not met',
                     'output': ''
                 }
+        
+        # Handle conditional blocks (if/then/else)
+        if self.if_condition is not None:
+            return self._execute_conditional_block(context)
         
         try:
             if self.type == 'command':
@@ -171,10 +181,35 @@ class WorkflowStep:
         # Use context's interpolation method
         return context.interpolate_string(template)
     
-    def _evaluate_condition(self, condition: str, context: WorkflowContext) -> bool:
-        """Evaluate a condition."""
-        # Use context's evaluation method
-        return bool(context.evaluate_expression(condition))
+    def _execute_conditional_block(self, context: WorkflowContext) -> Dict[str, Any]:
+        """Execute a conditional block (if/then/else)."""
+        condition_met = evaluate_condition(self.if_condition, context)
+        steps_to_execute = self.then_steps if condition_met else self.else_steps
+        
+        if not steps_to_execute:
+            return {
+                'status': 'success',
+                'output': f'Condition {"met" if condition_met else "not met"}, no steps to execute'
+            }
+        
+        # Execute the appropriate steps
+        results = []
+        for step_config in steps_to_execute:
+            step = WorkflowStep(step_config)
+            result = step.execute(context)
+            results.append(result)
+            
+            # Stop on error unless continue_on_error is set
+            if result['status'] == 'error' and not step.continue_on_error:
+                break
+        
+        # Aggregate results
+        return {
+            'status': 'success' if all(r['status'] in ['success', 'skipped'] for r in results) else 'error',
+            'output': '\n'.join(r.get('output', '') for r in results),
+            'results': results,
+            'condition_met': condition_met
+        }
 
 
 class Workflow:
