@@ -36,6 +36,7 @@ class WorkflowStep:
         self.continue_on_error = config.get('continue_on_error', False)
         self.condition = config.get('condition')
         self.timeout = config.get('timeout', 300)  # 5 minutes default
+        self.depends_on = config.get('depends_on', [])  # Dependencies for pipeline mode
         
         # Support for conditional step blocks
         self.if_condition = config.get('if')
@@ -221,6 +222,13 @@ class Workflow:
         self.env = config.get('env', {})
         self.on_error = config.get('on_error', 'stop')  # stop, continue, or cleanup
         self.cleanup_steps = [WorkflowStep(step) for step in config.get('cleanup', [])]
+        
+        # Parse parallel groups
+        self.parallel_groups = []
+        if 'parallel_groups' in config:
+            from .workflow_parallel import create_parallel_group
+            for group_config in config['parallel_groups']:
+                self.parallel_groups.append(create_parallel_group(group_config))
     
     def execute(self, context: Optional[WorkflowContext] = None) -> Dict[str, Any]:
         """Execute the workflow."""
@@ -239,6 +247,10 @@ class Workflow:
         
         results = []
         error_occurred = False
+        
+        # Check if we have parallel groups
+        if self.parallel_groups:
+            return self._execute_with_parallel_groups(context)
         
         with Progress() as progress:
             task = progress.add_task(f"Running workflow: {self.name}", total=len(self.steps))
@@ -301,6 +313,85 @@ class Workflow:
             'results': results,
             'context': context.to_dict()
         }
+    
+    def _execute_with_parallel_groups(self, context: WorkflowContext) -> Dict[str, Any]:
+        """Execute workflow with parallel groups."""
+        import asyncio
+        from .workflow_parallel import ParallelWorkflowExecutor
+        
+        async def run_parallel():
+            # Create workflow executor
+            from .workflows import WorkflowExecutor
+            executor = WorkflowExecutor(self.name, self.steps)
+            parallel_executor = ParallelWorkflowExecutor(executor)
+            
+            results = []
+            error_occurred = False
+            
+            with Progress() as progress:
+                task = progress.add_task(f"Running parallel workflow: {self.name}", total=len(self.parallel_groups))
+                
+                for i, group in enumerate(self.parallel_groups):
+                    console.print(f"[blue]Executing parallel group {i+1}/{len(self.parallel_groups)}: {group.name}[/blue]")
+                    
+                    try:
+                        group_results = await parallel_executor.execute_parallel_group(group, context)
+                        results.append({
+                            'group': i,
+                            'name': group.name,
+                            'results': group_results
+                        })
+                        progress.update(task, advance=1)
+                    except Exception as e:
+                        error_occurred = True
+                        context.add_error(str(e))
+                        results.append({
+                            'group': i,
+                            'name': group.name,
+                            'error': str(e)
+                        })
+                        
+                        if self.on_error == 'stop':
+                            break
+            
+            return results, error_occurred
+        
+        # Run async workflow
+        results, error_occurred = asyncio.run(run_parallel())
+        
+        # Run cleanup steps if configured
+        if self.cleanup_steps and (error_occurred or self.on_error == 'cleanup'):
+            console.print("[yellow]Running cleanup steps...[/yellow]")
+            for step in self.cleanup_steps:
+                try:
+                    step.execute(context)
+                except Exception as e:
+                    logger.error(f"Cleanup step failed: {e}")
+        
+        # Update workflow status
+        context.update_metadata(
+            end_time=datetime.now(),
+            status='error' if error_occurred else 'success'
+        )
+        
+        return {
+            'workflow': self.name,
+            'status': context.workflow_metadata['status'],
+            'results': results,
+            'context': context.to_dict()
+        }
+
+
+class WorkflowExecutor:
+    """Simple wrapper for executing workflow steps."""
+    
+    def __init__(self, workflow_name: str, steps: List[WorkflowStep]):
+        self.workflow_name = workflow_name
+        self.steps = steps
+    
+    def execute_step(self, step: WorkflowStep, context: WorkflowContext) -> Dict[str, Any]:
+        """Execute a single workflow step."""
+        return step.execute(context)
 
 
 class WorkflowManager:
