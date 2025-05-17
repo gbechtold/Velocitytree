@@ -23,6 +23,9 @@ class TestPluginDiscovery:
                 'directories': []
             }
         }
+        config.config_data = {
+            'plugins': []
+        }
         return config
     
     @pytest.fixture
@@ -91,7 +94,7 @@ description: Test plugin with metadata
             plugins = plugin_manager.discover_plugins()
             assert 'metadata_plugin' in plugins
     
-    @patch('velocitytree.plugins.entry_points')
+    @patch('importlib.metadata.entry_points')
     def test_discover_entry_point_plugins(self, mock_entry_points, plugin_manager):
         """Test discovering plugins from entry points."""
         # Mock entry point
@@ -104,14 +107,18 @@ description: Test plugin with metadata
         plugins = plugin_manager.discover_plugins()
         assert 'entry_plugin' in plugins
     
-    @patch('velocitytree.plugins.distributions')
-    def test_discover_pip_plugins(self, mock_distributions, plugin_manager):
+    @patch('importlib.metadata.distributions')
+    @patch('importlib.metadata.entry_points')
+    def test_discover_pip_plugins(self, mock_entry_points, mock_distributions, plugin_manager):
         """Test discovering pip-installed plugins."""
         # Mock distribution
         mock_dist = Mock()
         mock_dist.name = 'velocitytree-plugin-test'
         
         mock_distributions.return_value = [mock_dist]
+        
+        # Mock entry_points to return empty selection
+        mock_entry_points.return_value.select.return_value = []
         
         plugins = plugin_manager.discover_plugins()
         assert 'test' in plugins
@@ -122,17 +129,23 @@ description: Test plugin with metadata
             with patch('os.environ', {'VELOCITYTREE_PLUGIN_PATH': tmpdir}):
                 config = Mock(spec=Config)
                 config.config = {'plugins': {}}
+                config.config_data = {'plugins': []}
                 
                 manager = PluginManager(config)
-                assert Path(tmpdir) in manager.plugin_dirs
+                # Need to resolve the path since the manager normalizes paths
+                resolved_path = Path(tmpdir).resolve()
+                assert resolved_path in manager.plugin_dirs
     
     def test_config_custom_directories(self, mock_config):
         """Test plugin directories from config."""
         with tempfile.TemporaryDirectory() as tmpdir:
             mock_config.config['plugins']['directories'] = [tmpdir]
+            mock_config.config_data = {'plugins': {'directories': [tmpdir]}}
             
             manager = PluginManager(mock_config)
-            assert Path(tmpdir) in manager.plugin_dirs
+            # Need to resolve the path since the manager normalizes paths
+            resolved_path = Path(tmpdir).resolve()
+            assert resolved_path in manager.plugin_dirs
     
     def test_is_valid_plugin_package(self, plugin_manager):
         """Test plugin package validation."""
