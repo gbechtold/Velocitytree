@@ -1,0 +1,112 @@
+name: parallel_deployment
+description: Deploy application with parallel tasks
+
+env:
+  APP_NAME: myapp
+  VERSION: "1.0.0"
+
+# Traditional sequential steps can be mixed with parallel groups
+steps:
+  - name: Validate environment
+    type: command
+    command: echo "Validating deployment environment..."
+  
+  - name: Create backup
+    type: command
+    command: echo "Creating backup of current version..."
+
+# Parallel execution groups
+parallel_groups:
+  - name: Build artifacts
+    mode: concurrent  # Run all steps at the same time
+    steps:
+      - name: Build frontend
+        type: command
+        command: echo "Building frontend assets..."
+        env:
+          NODE_ENV: production
+      
+      - name: Build backend
+        type: command  
+        command: echo "Building backend application..."
+        env:
+          GOOS: linux
+          GOARCH: amd64
+      
+      - name: Build documentation
+        type: command
+        command: echo "Building documentation..."
+  
+  - name: Run tests
+    mode: batch  # Run in batches with limited concurrency
+    max_workers: 2
+    steps:
+      - name: Unit tests
+        type: command
+        command: echo "Running unit tests..."
+      
+      - name: Integration tests
+        type: command
+        command: echo "Running integration tests..."
+      
+      - name: E2E tests
+        type: command
+        command: echo "Running end-to-end tests..."
+      
+      - name: Performance tests
+        type: command
+        command: echo "Running performance tests..."
+  
+  - name: Deploy to regions
+    mode: fork_join  # Fork into parallel branches, then join
+    join_condition: "{{ all_regions_deployed }}"
+    steps:
+      - name: Deploy to US-East
+        type: command
+        command: echo "Deploying to US-East region..."
+        env:
+          REGION: us-east-1
+      
+      - name: Deploy to EU-West
+        type: command
+        command: echo "Deploying to EU-West region..."
+        env:
+          REGION: eu-west-1
+      
+      - name: Deploy to AP-Southeast
+        type: command
+        command: echo "Deploying to AP-Southeast region..."
+        env:
+          REGION: ap-southeast-1
+  
+  - name: Post-deployment tasks
+    mode: pipeline  # Execute with dependency resolution
+    steps:
+      - name: Health check
+        type: command
+        command: echo "Running health checks..."
+      
+      - name: Update load balancer
+        type: command
+        command: echo "Updating load balancer configuration..."
+        depends_on: [health_check]
+      
+      - name: Clear CDN cache
+        type: command
+        command: echo "Clearing CDN cache..."
+        depends_on: [health_check]
+      
+      - name: Send notification
+        type: command
+        command: echo "Sending deployment notification..."
+        depends_on: [update_load_balancer, clear_CDN_cache]
+
+# Cleanup steps run if deployment fails
+cleanup:
+  - name: Rollback deployment
+    type: command
+    command: echo "Rolling back to previous version..."
+  
+  - name: Alert team
+    type: command
+    command: echo "Alerting team about failed deployment..."

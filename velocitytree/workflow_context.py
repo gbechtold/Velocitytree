@@ -254,6 +254,16 @@ class WorkflowContext:
         self.global_vars = data.get('global_vars', {})
         self.step_outputs = data.get('step_outputs', {})
         self.workflow_metadata = data.get('workflow_metadata', {})
+    
+    def copy(self) -> 'WorkflowContext':
+        """Create a copy of the context."""
+        import copy
+        new_context = WorkflowContext()
+        new_context.global_vars = copy.deepcopy(self.global_vars)
+        new_context.step_outputs = copy.deepcopy(self.step_outputs)
+        new_context.workflow_metadata = copy.deepcopy(self.workflow_metadata)
+        new_context.current_step = self.current_step
+        return new_context
 
 
 class VariableStore:
