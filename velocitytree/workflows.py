@@ -222,7 +222,7 @@ class Workflow:
         self.on_error = config.get('on_error', 'stop')  # stop, continue, or cleanup
         self.cleanup_steps = [WorkflowStep(step) for step in config.get('cleanup', [])]
     
-    def execute(self, context: Optional[WorkflowContext] = None) -> Dict[str, Any]:
+    def execute(self, context: Optional[WorkflowContext] = None, plugin_manager=None) -> Dict[str, Any]:
         """Execute the workflow."""
         if context is None:
             context = WorkflowContext()
@@ -237,6 +237,10 @@ class Workflow:
         for key, value in self.env.items():
             context.set_global_var(key, value)
         
+        # Trigger workflow start hook
+        if plugin_manager:
+            plugin_manager.trigger_hook('workflow_start', self.name, context)
+        
         results = []
         error_occurred = False
         
@@ -247,6 +251,10 @@ class Workflow:
                 console.print(f"[blue]Executing step {i+1}/{len(self.steps)}: {step.name}[/blue]")
                 
                 try:
+                    # Trigger step start hook
+                    if plugin_manager:
+                        plugin_manager.trigger_hook('workflow_step_start', self.name, step.name, context)
+                    
                     result = step.execute(context)
                     results.append({
                         'step': i,
@@ -259,6 +267,10 @@ class Workflow:
                     context.set_step_output(step.name, result)
                     context.update_metadata(steps_completed=i+1)
                     
+                    # Trigger step complete hook
+                    if plugin_manager:
+                        plugin_manager.trigger_hook('workflow_step_complete', self.name, step.name, result, context)
+                    
                     progress.update(task, advance=1)
                     
                     if result['status'] == 'error' and self.on_error == 'stop':
@@ -268,14 +280,19 @@ class Workflow:
                 except Exception as e:
                     error_occurred = True
                     context.add_error(str(e))
+                    error_result = {
+                        'status': 'error',
+                        'error': str(e)
+                    }
                     results.append({
                         'step': i,
                         'name': step.name,
-                        'result': {
-                            'status': 'error',
-                            'error': str(e)
-                        }
+                        'result': error_result
                     })
+                    
+                    # Trigger workflow error hook
+                    if plugin_manager:
+                        plugin_manager.trigger_hook('workflow_error', self.name, e, context)
                     
                     if self.on_error == 'stop':
                         break
@@ -295,19 +312,27 @@ class Workflow:
             status='error' if error_occurred else 'success'
         )
         
-        return {
+        # Prepare final result
+        result = {
             'workflow': self.name,
             'status': context.workflow_metadata['status'],
             'results': results,
             'context': context.to_dict()
         }
+        
+        # Trigger workflow complete hook
+        if plugin_manager:
+            plugin_manager.trigger_hook('workflow_complete', self.name, result, context)
+        
+        return result
 
 
 class WorkflowManager:
     """Manages workflow creation, storage, and execution."""
     
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, plugin_manager=None):
         self.config = config
+        self.plugin_manager = plugin_manager
         self.workflows_dir = Path.home() / '.velocitytree' / 'workflows'
         ensure_directory(self.workflows_dir)
         
@@ -411,7 +436,7 @@ class WorkflowManager:
             context = WorkflowContext(global_vars=global_vars)
         
         logger.info(f"Starting workflow: {name}")
-        result = workflow.execute(context)
+        result = workflow.execute(context, plugin_manager=self.plugin_manager)
         logger.info(f"Workflow completed: {name} - Status: {result['status']}")
         
         return result

@@ -125,6 +125,7 @@ def init(ctx, template, name, force):
 def flatten(ctx, output, exclude, include_ext, preserve_structure, follow_symlinks, source):
     """Flatten project directory structure (TreeTamer functionality)."""
     config = ctx.obj['config']
+    plugin_manager = ctx.obj.get('plugin_manager')
     
     # Merge command-line options with config
     flatten_config = config.config.flatten
@@ -138,17 +139,36 @@ def flatten(ctx, output, exclude, include_ext, preserve_structure, follow_symlin
     preserve = preserve_structure if preserve_structure else flatten_config.preserve_structure
     follow = follow_symlinks if follow_symlinks else flatten_config.follow_symlinks
     
-    # Create flattener with merged configuration
+    # Prepare options for hook
+    options = {
+        'output_dir': output_dir,
+        'exclude_patterns': exclude_patterns,
+        'include_extensions': include_extensions,
+        'preserve_structure': preserve,
+        'follow_symlinks': follow
+    }
+    
+    # Trigger before flatten hook
+    if plugin_manager:
+        modified_options = plugin_manager.trigger_hook('flatten_start', source, options)
+        if modified_options and isinstance(modified_options[0], dict):
+            options.update(modified_options[0])
+    
+    # Create flattener with potentially modified options
     flattener = TreeFlattener(
-        output_dir=output_dir,
-        exclude_patterns=exclude_patterns,
-        include_extensions=include_extensions,
-        preserve_structure=preserve,
-        follow_symlinks=follow
+        output_dir=options['output_dir'],
+        exclude_patterns=options['exclude_patterns'],
+        include_extensions=options['include_extensions'],
+        preserve_structure=options['preserve_structure'],
+        follow_symlinks=options['follow_symlinks']
     )
     
     with console.status("Flattening directory structure...") as status:
         result = flattener.flatten(source_dir=source)
+    
+    # Trigger after flatten hook
+    if plugin_manager:
+        plugin_manager.trigger_hook('flatten_complete', result, source)
         
     console.print(f"[green]✓[/green] Flattened {result['files_processed']} files")
     console.print(f"Output directory: [blue]{result['output_dir']}[/blue]")
@@ -717,6 +737,81 @@ def deactivate_plugin(ctx, name):
         console.print(f"[red]✗[/red] Failed to deactivate plugin '{name}'")
 
 
+@plugin.command('hooks')
+@click.option('--event', '-e', help='Show hooks for specific event')
+@click.pass_context
+def list_hooks(ctx, event):
+    """List registered hooks."""
+    from .plugins import PluginManager
+    
+    manager = PluginManager(config=ctx.obj['config'])
+    
+    if event:
+        # Show hooks for specific event
+        hooks = manager.hook_manager.hooks.get(event, [])
+        if not hooks:
+            console.print(f"[yellow]No hooks registered for event '{event}'[/yellow]")
+            return
+        
+        table = Table(title=f"Hooks for event '{event}'")
+        table.add_column("Callback", style="cyan")
+        table.add_column("Priority", style="yellow")
+        
+        for callback, priority in hooks:
+            table.add_row(callback.__name__, str(priority))
+    else:
+        # Show all available hooks
+        available = manager.hook_manager.list_available_hooks()
+        
+        table = Table(title="Available Hook Events")
+        table.add_column("Event", style="cyan")
+        table.add_column("Description", style="green")
+        table.add_column("Args", style="yellow")
+        table.add_column("Returns", style="blue")
+        
+        for event_name, info in available.items():
+            args = ', '.join(info['args']) if info['args'] else 'None'
+            returns = info['return'] or 'None'
+            table.add_row(
+                event_name,
+                info['description'],
+                args,
+                returns
+            )
+    
+    console.print(table)
+
+
+@plugin.command('health')
+@click.argument('name')
+@click.pass_context
+def check_plugin_health(ctx, name):
+    """Check plugin health."""
+    from .plugins import PluginManager
+    
+    manager = PluginManager(config=ctx.obj['config'])
+    
+    if manager.check_plugin_health(name):
+        console.print(f"[green]✓[/green] Plugin '{name}' is healthy")
+    else:
+        console.print(f"[red]✗[/red] Plugin '{name}' is not healthy")
+
+
+@plugin.command('reload')
+@click.argument('name')
+@click.pass_context
+def reload_plugin(ctx, name):
+    """Reload a plugin."""
+    from .plugins import PluginManager
+    
+    manager = PluginManager(config=ctx.obj['config'])
+    
+    if manager.reload_plugin(name):
+        console.print(f"[green]✓[/green] Plugin '{name}' reloaded")
+    else:
+        console.print(f"[red]✗[/red] Failed to reload plugin '{name}'")
+
+
 @cli.command()
 def version():
     """Show version information."""
@@ -755,11 +850,29 @@ def config(ctx, output, format):
 
 def main():
     """Main entry point."""
+    from .plugins import PluginManager
+    from .config import Config
+    
+    config = Config()
+    plugin_manager = None
+    
     try:
+        # Initialize plugin manager
+        plugin_manager = PluginManager(config)
+        
+        # Trigger startup hook
+        plugin_manager.trigger_hook('velocitytree_startup', config)
+        
+        # Run CLI
         cli(obj={})
+        
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
         sys.exit(1)
+    finally:
+        # Trigger shutdown hook
+        if plugin_manager:
+            plugin_manager.trigger_hook('velocitytree_shutdown')
 
 
 if __name__ == "__main__":
