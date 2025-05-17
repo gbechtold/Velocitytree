@@ -72,5 +72,6 @@ Working on: **Step 4 - Workflow System**
    
 ### Active Tickets
 6. `FEAT-006`: Add plugin lifecycle hooks
-   - Status: In Progress
+   - Status: PR Open (Ready for review)
    - Branch: feat-006-plugin-lifecycle-hooks
+   - PR: https://github.com/gbechtold/Velocitytree/pull/new/feat-006-plugin-lifecycle-hooks
