@@ -10,9 +10,9 @@
 - [ ] `TEST-001`: Add comprehensive workflow tests
 
 ### Step 5: Plugin System
-- [ ] `FEAT-005`: Create plugin discovery mechanism
-- [ ] `FEAT-006`: Add plugin lifecycle hooks
-- [ ] `FEAT-007`: Create example plugins
+- [x] `FEAT-005`: Create plugin discovery mechanism
+- [x] `FEAT-006`: Add plugin lifecycle hooks
+- [ ] `FEAT-007`: Create example plugins (IN PROGRESS)
 - [ ] `DOC-001`: Write plugin development guide
 - [ ] `TEST-002`: Add plugin system tests
 
@@ -51,7 +51,7 @@
 
 ## Current Sprint
 
-Working on: **Step 4 - Workflow System**
+Working on: **Step 5 - Plugin System**
 
 ### Completed Tickets
 1. `FEAT-001`: Add workflow templates ✅
@@ -68,6 +68,16 @@ Working on: **Step 4 - Workflow System**
 3. `FEAT-003`: Add conditional workflow steps ✅
    - Status: Complete
    - Branch: feature/FEAT-003-conditional-workflow-steps
+   - PR: Ready for review
+
+4. `FEAT-005`: Create plugin discovery mechanism ✅
+   - Status: Complete
+   - Branch: feature/feat-005-plugin-discovery
+   - PR: Ready for review
+
+5. `FEAT-006`: Implement plugin lifecycle hooks ✅
+   - Status: Complete  
+   - Branch: feature/feat-006-plugin-lifecycle
    - PR: Ready for review
    
 
