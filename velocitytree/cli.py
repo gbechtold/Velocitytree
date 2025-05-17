@@ -407,14 +407,53 @@ def list_workflows(ctx):
     
     console.print(table)
 
+@workflow.command('templates')
+@click.pass_context
+def list_templates(ctx):
+    """List available workflow templates."""
+    manager = WorkflowManager(config=ctx.obj['config'])
+    templates = manager.list_templates()
+    
+    if not templates:
+        console.print("[yellow]No templates found.[/yellow]")
+        return
+    
+    table = Table(title="Available Workflow Templates")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name", style="yellow")
+    table.add_column("Description", style="green")
+    table.add_column("Steps", style="blue")
+    
+    for template in templates:
+        table.add_row(
+            template['id'],
+            template['name'],
+            template['description'][:50] + "..." if len(template['description']) > 50 else template['description'],
+            str(template['steps'])
+        )
+    
+    console.print(table)
+
 @workflow.command()
 @click.argument('name')
+@click.option('--template', '-t', help='Use a workflow template')
 @click.option('--edit', '-e', is_flag=True, help='Edit workflow after creation')
 @click.pass_context
-def create(ctx, name, edit):
+def create(ctx, name, template, edit):
     """Create a new workflow."""
     manager = WorkflowManager(config=ctx.obj['config'])
-    workflow = manager.create_workflow(name)
+    
+    # Check if template is valid
+    if template:
+        templates = {t['id']: t for t in manager.list_templates()}
+        if template not in templates:
+            console.print(f"[red]Invalid template:[/red] {template}")
+            console.print("Available templates:")
+            for tid, tinfo in templates.items():
+                console.print(f"  - {tid}: {tinfo['name']}")
+            return
+    
+    workflow = manager.create_workflow(name, template=template)
     console.print(f"[green]✓[/green] Workflow '{name}' created")
     
     if edit:
