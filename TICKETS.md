@@ -71,7 +71,6 @@ Working on: **Step 4 - Workflow System**
    - PR: Ready for review
    
 ### Active Tickets
-5. `TEST-001`: Add comprehensive workflow tests
-   - Status: PR Open (Ready for review)
-   - Branch: test-001-comprehensive-workflow-tests
-   - PR: https://github.com/gbechtold/Velocitytree/pull/new/test-001-comprehensive-workflow-tests
+6. `FEAT-006`: Add plugin lifecycle hooks
+   - Status: In Progress
+   - Branch: feat-006-plugin-lifecycle-hooks
