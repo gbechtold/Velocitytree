@@ -71,6 +71,6 @@ Working on: **Step 4 - Workflow System**
    - PR: Ready for review
    
 ### Active Tickets
-4. `FEAT-004`: Implement parallel workflow execution
-   - Status: Not started
-   - Branch: TBD
+5. `TEST-001`: Add comprehensive workflow tests
+   - Status: In Progress
+   - Branch: test-001-comprehensive-workflow-tests
