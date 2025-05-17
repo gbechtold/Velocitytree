@@ -16,7 +16,9 @@
       "Bash(vtree:*)",
       "Bash(git push:*)",
       "Bash(git checkout:*)",
-      "Bash(python -m pytest tests/test_workflow_templates.py -v)"
+      "Bash(python -m pytest tests/test_workflow_templates.py -v)",
+      "Bash(python -m pytest tests/test_workflow_context.py -v)",
+      "Bash(python:*)"
     ],
     "deny": []
   }
