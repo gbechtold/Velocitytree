@@ -36,6 +36,13 @@ def cli(ctx, config, verbose, quiet):
         logger.setLevel('DEBUG')
     elif quiet:
         logger.setLevel('ERROR')
+    
+    # Initialize plugin manager
+    from .plugins import PluginManager
+    ctx.obj['plugin_manager'] = PluginManager(ctx.obj['config'])
+    
+    # Register plugin commands
+    ctx.obj['plugin_manager'].register_cli_commands(cli)
 
 
 @cli.command()
