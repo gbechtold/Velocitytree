@@ -53,7 +53,13 @@
 
 Working on: **Step 4 - Workflow System**
 
-### Active Tickets
-1. `FEAT-001`: Add workflow templates
-   - Status: In Progress
+### Completed Tickets
+1. `FEAT-001`: Add workflow templates ✅
+   - Status: Complete
    - Branch: feature/FEAT-001-workflow-templates
+   - PR: Ready for review
+
+### Active Tickets
+2. `FEAT-002`: Implement workflow variables and context
+   - Status: Starting
+   - Branch: feature/FEAT-002-workflow-variables
