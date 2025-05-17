@@ -1,0 +1,62 @@
+# Default configuration for Velocitytree
+# This file serves as the template for project and user configurations
+
+project:
+  name: "Velocitytree Project"
+  version: "0.1.0"
+  description: ""
+
+flatten:
+  default_output: "context.md"
+  default_format: "markdown"
+  max_file_size: 1048576  # 1MB
+  max_tree_depth: 10
+  exclude_patterns:
+    - "*.pyc"
+    - "*.pyo"
+    - "__pycache__"
+    - ".git"
+    - ".venv"
+    - "venv"
+    - "node_modules"
+    - "*.log"
+    - ".DS_Store"
+    - ".pytest_cache"
+    - "*.egg-info"
+    - "dist"
+    - "build"
+
+ai:
+  default_model: "gpt-4"
+  max_tokens: 4000
+  temperature: 0.7
+  api_timeout: 60
+  providers:
+    openai:
+      base_url: "https://api.openai.com/v1"
+    anthropic:
+      base_url: "https://api.anthropic.com/v1"
+
+workflows:
+  directory: ".velocitytree/workflows"
+  auto_save: true
+  max_retries: 3
+
+plugins:
+  auto_load: true
+  enabled: []
+  directories:
+    - "~/.velocitytree/plugins"
+    - "./plugins"
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "velocitytree.log"
+  console: true
+
+cache:
+  enabled: true
+  directory: "~/.velocitytree/cache"
+  max_size: 104857600  # 100MB
+  ttl: 3600  # 1 hour

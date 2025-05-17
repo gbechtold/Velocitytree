@@ -5,20 +5,63 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://github.com/gbechtold/Velocitytree/workflows/Tests/badge.svg)](https://github.com/gbechtold/Velocitytree/actions)
 
-Velocitytree is a powerful Python tool that streamlines developer workflows by intelligently managing project structure, context, and integrating AI assistance. It's the evolution of [TreeTamer](https://github.com/gbechtold/TreeTamer), bringing enhanced functionality and AI capabilities to project management.
+## 🎯 The Problem We Solve
 
-## 🚀 Features
+Ever struggled with:
+- **Complex project structures** becoming unwieldy and hard to navigate?
+- **AI assistants** lacking project context and generating irrelevant code?
+- **Repetitive tasks** eating up your valuable development time?
+- **Managing multiple workflows** across different projects?
+- **Documentation** that gets out of sync with your codebase?
 
-- **Project Structure Flattening**: Simplify complex directory hierarchies for easier navigation and management
-- **Smart Context Management**: Automatically extract and maintain relevant project context
-- **AI Integration**: Seamlessly integrate with AI assistants for enhanced code analysis and generation
-- **Workflow Automation**: Streamline repetitive tasks and boost productivity
-- **Extensible Plugin System**: Add custom functionality through a flexible plugin architecture
-- **Rich CLI Interface**: Beautiful, intuitive command-line interface with progress indicators
-- **Project Templates**: Quick project initialization with best practices
-- **Configuration Management**: Flexible configuration through YAML, TOML, or environment variables
+**Velocitytree is your solution!** 🚀
 
-## 📦 Installation
+## ✨ Benefits
+
+- **Flatten complex codebases** into manageable, AI-friendly formats
+- **Boost AI coding accuracy** by providing perfect context to ChatGPT, Claude, and others
+- **Accelerate development** with automated workflows and smart templates
+- **Maintain project consistency** across your entire team
+- **Plugin architecture** for unlimited extensibility
+
+## 🚀 Quick Start (One-Line Install)
+
+```bash
+# Clone, setup environment, and install in one command:
+git clone https://github.com/gbechtold/Velocitytree.git && cd Velocitytree && python3 -m venv venv && source venv/bin/activate && pip install -e .
+```
+
+## 💡 Basic Usage
+
+Initialize a new project:
+```bash
+vtree init
+```
+
+Flatten your project structure for AI analysis:
+```bash
+vtree flatten --output context.md
+```
+
+Get AI assistance with your project:
+```bash
+vtree ask "How can I optimize this codebase?"
+```
+
+Create a documentation snapshot:
+```bash
+vtree flatten --format markdown --include "*.py" --output docs/structure.md
+```
+
+## 📦 Installation Options
+
+### Quick Install (Recommended)
+
+The one-liner above is the fastest way to get started. It automatically:
+1. Clones the repository
+2. Creates a virtual environment
+3. Activates the environment
+4. Installs Velocitytree in development mode
 
 ### From PyPI
 
@@ -26,197 +69,236 @@ Velocitytree is a powerful Python tool that streamlines developer workflows by i
 pip install velocitytree
 ```
 
-### From Source (Recommended for Development)
-
-> ⚠️ **Important**: Always use a virtual environment to avoid Python system conflicts
+### Manual Installation
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/gbechtold/Velocitytree.git
 cd Velocitytree
 
-# Create and activate virtual environment
+# 2. Create virtual environment (IMPORTANT!)
 python3 -m venv venv
+
+# 3. Activate virtual environment
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install in development mode
+# 4. Install in development mode
 pip install -e .
-
-# Optional: Install development dependencies
-pip install -r requirements-dev.txt
 ```
 
-### Automated Setup Script
+### Using Setup Scripts
 
-For convenience, use our setup script:
+For convenience, we provide automated setup scripts:
 
+**Unix/Mac:**
 ```bash
-# Unix/Mac
-git clone https://github.com/gbechtold/Velocitytree.git
-cd Velocitytree
-./scripts/setup.sh        # Basic installation
-./scripts/setup.sh --dev  # Include development dependencies
-
-# Windows
-git clone https://github.com/gbechtold/Velocitytree.git
-cd Velocitytree
-scripts\setup.bat        # Basic installation  
-scripts\setup.bat --dev  # Include development dependencies
+./scripts/setup.sh
 ```
 
-### One-Line Installation (Unix/Mac)
-
-```bash
-git clone https://github.com/gbechtold/Velocitytree.git && cd Velocitytree && python3 -m venv venv && source venv/bin/activate && pip install -e .
+**Windows:**
+```powershell
+.\scripts\setup.ps1
 ```
 
-## 🏃 Quick Start
+These scripts handle virtual environment creation and dependency installation automatically.
 
+## 🔧 Core Commands
+
+| Command | Description |
+|---------|-------------|
+| `vtree init` | Initialize a new Velocitytree project |
+| `vtree flatten` | Create a flattened view of your project |
+| `vtree context` | Extract project context for AI tools |
+| `vtree ask` | Get AI assistance with your code |
+| `vtree workflow` | Manage project workflows |
+| `vtree plugin` | Manage plugins |
+
+For detailed command options, use `vtree [command] --help`.
+
+## 🌟 Key Features
+
+### Project Structure Flattening
+Transform complex directory trees into AI-digestible formats:
 ```bash
-# Initialize a new project
-vtree init
+# Flatten only Python files for code review
+vtree flatten --include "*.py" --format markdown
 
-# Flatten project structure (like TreeTamer)
-vtree flatten
-
-# Generate project context for AI
-vtree context
-
-# Analyze project structure
-vtree analyze
-
-# Create a new workflow
-vtree workflow create
-```
-
-## 🎯 Key Commands
-
-### Project Management
-
-```bash
-# Initialize a new Velocitytree project
-vtree init [--template <template-name>]
-
-# Flatten directory structure
-vtree flatten [--output <output-dir>] [--exclude <patterns>]
-
-# Generate project context
-vtree context [--format <json|yaml|markdown>] [--output <file>]
+# Create comprehensive project overview
+vtree flatten --format tree --max-depth 3
 ```
 
 ### AI Integration
-
+Work smarter with AI assistants:
 ```bash
-# Analyze code with AI
-vtree ai analyze <file>
+# Get implementation suggestions
+vtree ask "How should I implement user authentication?"
 
-# Generate code suggestions
-vtree ai suggest <task>
-
-# Create AI-ready context
-vtree ai context
+# Analyze code quality
+vtree ask --context full "What improvements can be made to the codebase?"
 ```
 
-### Workflow Management
-
+### Workflow Automation
+Streamline repetitive tasks:
 ```bash
-# List available workflows
-vtree workflow list
+# Run predefined workflow
+vtree workflow run deploy
 
-# Create a new workflow
-vtree workflow create <name>
+# Create custom workflow
+vtree workflow create my-workflow
+```
 
-# Run a workflow
-vtree workflow run <name>
+### Plugin System
+Extend functionality:
+```bash
+# List available plugins
+vtree plugin list
+
+# Install a plugin
+vtree plugin install awesome-plugin
 ```
 
 ## ⚙️ Configuration
 
-Create a `.velocitytree.yaml` file in your project root:
+Velocitytree can be configured via:
+- `.velocitytree.yaml` - Project configuration
+- `~/.velocitytree/config.yaml` - Global configuration
+- Environment variables (prefix: `VELOCITYTREE_`)
 
+Example configuration:
 ```yaml
+# .velocitytree.yaml
 project:
-  name: MyAwesomeProject
+  name: MyProject
   version: 1.0.0
 
 flatten:
-  exclude:
-    - node_modules
-    - .git
-    - __pycache__
-    - '*.pyc'
-  include_extensions:
-    - .py
-    - .js
-    - .md
-    - .yaml
-    - .json
+  default_output: context.md
+  exclude_patterns:
+    - "*.log"
+    - "__pycache__"
+    - ".git"
 
 ai:
-  provider: openai
-  model: gpt-4
-  api_key: ${OPENAI_API_KEY}
-
-workflows:
-  daily_standup:
-    - command: git status
-    - command: vtree analyze --changes
-    - command: vtree ai suggest --context today
+  default_model: gpt-4
+  max_tokens: 4000
 ```
 
-## 🔌 Plugin System
+## 🔌 Plugin Development
 
 Create custom plugins to extend Velocitytree:
 
 ```python
-# plugins/my_plugin.py
-from velocitytree.plugins import Plugin
+from velocitytree.plugin_system import Plugin
 
 class MyPlugin(Plugin):
-    name = "my_plugin"
-    version = "1.0.0"
+    """Custom plugin example."""
     
-    def register_commands(self, cli):
-        @cli.command()
-        def my_command():
-            """My custom command"""
-            self.logger.info("Running my custom command")
+    @property
+    def name(self):
+        return "my_plugin"
+    
+    def activate(self):
+        """Called when plugin is activated."""
+        super().activate()
+        # Your initialization code here
 ```
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+See our [Plugin Development Guide](docs/PLUGIN_DEVELOPMENT.md) for detailed instructions.
 
 ## 📚 Documentation
 
-Full documentation is available at [https://velocitytree.readthedocs.io](https://velocitytree.readthedocs.io)
+- [User Guide](docs/USER_GUIDE.md)
+- [API Reference](docs/API.md)
+- [Plugin Development](docs/PLUGIN_DEVELOPMENT.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
-## 🙏 Acknowledgments
+## 🤝 Contributing
 
-- Based on [TreeTamer](https://github.com/gbechtold/TreeTamer) by Guntram Bechtold
-- Inspired by modern developer workflow tools
-- Built with love for the developer community
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+- Code of Conduct
+- Development setup
+- Submitting pull requests
+- Reporting issues
+
+## 🌟 The Velocitytree Advantage
+
+Velocitytree is the evolution of [TreeTamer](https://github.com/gbechtold/TreeTamer), adding:
+- Advanced AI integration
+- Workflow automation
+- Plugin architecture
+- Better performance
+- Enhanced CLI experience
+
+## 🛠️ Development
+
+For development setup:
+
+```bash
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Run tests
+pytest
+
+# Run linters
+flake8 velocitytree
+black velocitytree
+```
+
+### Pre-commit Hooks
+
+We use pre-commit hooks to maintain code quality:
+```bash
+pre-commit install
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Issue: ModuleNotFoundError when running vtree**
+```bash
+# Solution: Ensure you're in the virtual environment
+source venv/bin/activate  # Unix/Mac
+# or
+venv\Scripts\activate  # Windows
+```
+
+**Issue: Permission errors**
+```bash
+# Solution: Use virtual environment instead of system Python
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+```
+
+### Getting Help
+
+1. Check the [FAQ](docs/FAQ.md)
+2. Search [existing issues](https://github.com/gbechtold/Velocitytree/issues)
+3. Open a new issue with the bug report template
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🐛 Bug Reports & Feature Requests
+## 🙏 Acknowledgments
 
-Please use the [GitHub Issues](https://github.com/gbechtold/Velocitytree/issues) page to report bugs or request features.
+- Built on the foundation of [TreeTamer](https://github.com/gbechtold/TreeTamer)
+- Thanks to all our [contributors](https://github.com/gbechtold/Velocitytree/graphs/contributors)
+- Inspired by the need for better AI-assisted development tools
 
-## 📧 Contact
+## 🚧 Roadmap
 
-Guntram Bechtold - [@gbechtold](https://github.com/gbechtold)
-
-Project Link: [https://github.com/gbechtold/Velocitytree](https://github.com/gbechtold/Velocitytree)
+- [ ] GUI interface
+- [ ] Cloud synchronization
+- [ ] Team collaboration features
+- [ ] Additional AI model support
+- [ ] Performance optimizations
 
 ---
 
-⭐ If you find Velocitytree helpful, please consider giving it a star on GitHub! ⭐
+**Made with ❤️ by the Velocitytree Team**
+
+*Star ⭐ this repo if you find it useful!*

@@ -19,7 +19,8 @@
       "Bash(python -m pytest tests/test_workflow_templates.py -v)",
       "Bash(python -m pytest tests/test_workflow_context.py -v)",
       "Bash(python:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

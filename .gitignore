@@ -134,3 +134,11 @@ output/
 tamed_tree/
 *.vtree
 .velocitytree/
+.velocitytree.yaml
+!.velocitytree.example.yaml
+velocitytree.log
+.velocitytree/logs/
+context.md
+flattened*
+config/user_config.yaml
+config/local_config.yaml
