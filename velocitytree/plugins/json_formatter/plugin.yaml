@@ -1,0 +1,10 @@
+name: json_formatter
+version: 1.0.0
+description: Formats generated code context as pretty-printed JSON
+author: Velocitytree Team
+entry_point: velocitytree.plugins.json_formatter:JSONFormatterPlugin
+main_class: JSONFormatterPlugin
+requirements: []
+config:
+  indent: 2
+  sort_keys: true

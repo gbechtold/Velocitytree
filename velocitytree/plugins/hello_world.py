@@ -2,7 +2,7 @@
 Hello World plugin for Velocitytree.
 """
 
-from velocitytree.plugins import Plugin
+from velocitytree.plugin_system import Plugin
 
 
 class HelloWorldPlugin(Plugin):

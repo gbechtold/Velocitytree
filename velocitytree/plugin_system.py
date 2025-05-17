@@ -38,9 +38,12 @@ class Plugin(ABC):
         """Optional author information."""
         return ""
     
-    def __init__(self, config: Config):
+    def __init__(self, config: Optional[Config] = None):
         self.config = config
-        self.logger = logger.getChild(self.name)
+        if config:
+            self.logger = logger.getChild(self.name)
+        else:
+            self.logger = logger
     
     @abstractmethod
     def activate(self):
@@ -110,7 +113,11 @@ class PluginManager:
             plugin_dir.mkdir(parents=True, exist_ok=True)
         
         # Auto-discover and load enabled plugins
-        if config.config.get('plugins', {}).get('auto_load', True):
+        plugin_config = config.config_data.get('plugins', [])
+        if isinstance(plugin_config, dict) and plugin_config.get('auto_load', True):
+            self._auto_load_plugins()
+        else:
+            # If plugins is a list or not configured, still auto-load
             self._auto_load_plugins()
     
     def _get_plugin_directories(self) -> List[Path]:
@@ -121,7 +128,11 @@ class PluginManager:
         ]
         
         # Add custom plugin directories from config
-        custom_dirs = self.config.config.get('plugins', {}).get('directories', [])
+        plugin_config = self.config.config_data.get('plugins', [])
+        if isinstance(plugin_config, dict):
+            custom_dirs = plugin_config.get('directories', [])
+        else:
+            custom_dirs = []
         for dir_path in custom_dirs:
             path = Path(dir_path).expanduser().resolve()
             if path not in dirs:
@@ -139,7 +150,11 @@ class PluginManager:
     
     def _auto_load_plugins(self):
         """Auto-load enabled plugins from config."""
-        enabled_plugins = self.config.config.get('plugins', {}).get('enabled', [])
+        plugin_config = self.config.config_data.get('plugins', [])
+        if isinstance(plugin_config, dict):
+            enabled_plugins = plugin_config.get('enabled', [])
+        else:
+            enabled_plugins = []
         
         for plugin_name in enabled_plugins:
             try:
