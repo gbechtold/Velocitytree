@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Velocitytree Demo - Spring Layout</title>
+<style>
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .visualization-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin: 20px auto;
+            max-width: 1200px;
+            overflow: auto;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .controls button {
+            margin: 0 5px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: #2196F3;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .controls button:hover {
+            background-color: #1976D2;
+        }
+        
+        .info-panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin: 20px auto;
+            max-width: 1200px;
+            display: none;
+        }
+        
+        .info-panel.active {
+            display: block;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #333;
+        }
+        
+        .node {
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        
+        .node:hover {
+            opacity: 0.8;
+        }
+        
+        .node.highlighted {
+            filter: brightness(1.2);
+        }
+        
+        .node.dimmed {
+            opacity: 0.3;
+        }
+        
+        line {
+            transition: opacity 0.3s;
+        }
+        
+        line.highlighted {
+            stroke-width: 4 !important;
+        }
+        
+        line.dimmed {
+            opacity: 0.3;
+        }
+        
+</style>
+</head>
+<body>
+<h1>Velocitytree Demo - Spring Layout</h1>
+<div class="controls">
+
+        <button onclick="toggleInfoPanel()">Show/Hide Info</button>
+        <button onclick="resetHighlight()">Reset View</button>
+        <button onclick="filterByStatus('completed')">Show Completed</button>
+        <button onclick="filterByStatus('in_progress')">Show In Progress</button>
+        <button onclick="filterByStatus('blocked')">Show Blocked</button>
+        <button onclick="showAll()">Show All</button>
+        
+</div>
+<div class="visualization-container">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+<defs>
+
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+        </marker>
+        
+
+        <filter id="dropshadow" height="130%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+            <feOffset dx="2" dy="2" result="offsetblur"/>
+            <feComponentTransfer>
+                <feFuncA type="linear" slope="0.3"/>
+            </feComponentTransfer>
+            <feMerge>
+                <feMergeNode/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+        
+</defs>
+<g class="graph-container">
+<g class="relationships">
+<line x1="362.17132873603697" y1="550.0646255524833" x2="1121.8384480946856" y2="271.12486429659873" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m1" data-target="auth" data-type="includes"/>
+<line x1="362.17132873603697" y1="550.0646255524833" x2="182.7673505904902" y2="505.96315430744" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m1" data-target="git" data-type="includes"/>
+<line x1="362.17132873603697" y1="550.0646255524833" x2="371.6787370740463" y2="122.90777670005691" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m1" data-target="planning" data-type="includes"/>
+<line x1="694.6405600690148" y1="272.9448772372344" x2="287.02284946975266" y2="306.052299820596" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m2" data-target="graph" data-type="includes"/>
+<line x1="694.6405600690148" y1="272.9448772372344" x2="668.1053718527231" y2="636.7845839355518" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m2" data-target="ai" data-type="includes"/>
+<line x1="694.6405600690148" y1="272.9448772372344" x2="124.07238620943083" y2="233.30597758367907" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m2" data-target="plugins" data-type="includes"/>
+<line x1="1118.7703096276935" y1="460.65500902214114" x2="689.860348379633" y2="103.13696042073812" stroke="#9C27B0" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m3" data-target="auto" data-type="includes"/>
+<line x1="1118.7703096276935" y1="460.65500902214114" x2="1127.6007450161271" y2="594.0673621542019" stroke="#9C27B0" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m3" data-target="cloud" data-type="includes"/>
+<line x1="1118.7703096276935" y1="460.65500902214114" x2="561.7396374685596" y2="736.1898749117771" stroke="#9C27B0" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m3" data-target="collab" data-type="includes"/>
+<line x1="153.63466289059232" y1="498.80169444368187" x2="1120.8210184125962" y2="267.7547533109274" stroke="#333" stroke-width="2" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="git" data-target="auth" data-type="depends_on"/>
+<line x1="372.3462942691223" y1="92.91520482982041" x2="1120.6754562087046" y2="254.45413707438303" stroke="#333" stroke-width="2" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="planning" data-target="auth" data-type="depends_on"/>
+<line x1="257.12131712830865" y1="308.4809545168378" x2="358.20413600302237" y2="119.37270583759853" stroke="#333" stroke-width="2.5" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="graph" data-target="planning" data-type="depends_on"/>
+<line x1="665.9232379115949" y1="666.7051168763766" x2="386.01093772753336" y2="119.62246075689957" stroke="#333" stroke-width="3" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="ai" data-target="planning" data-type="depends_on"/>
+<line x1="665.9232379115949" y1="666.7051168763766" x2="182.14253815694957" y2="508.1451974162194" stroke="#333" stroke-width="2.5" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="ai" data-target="git" data-type="depends_on"/>
+<line x1="94.1445219913663" y1="231.22680867637678" x2="1120.0117479658456" y2="259.9448254293438" stroke="#333" stroke-width="2" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="plugins" data-target="auth" data-type="depends_on"/>
+<line x1="666.8161696820723" y1="83.92847718663324" x2="665.9692039298696" y2="636.7051520909779" stroke="#333" stroke-width="3" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="auto" data-target="ai" data-type="depends_on"/>
+<line x1="1129.582080811622" y1="624.0018624584577" x2="1148.3162376088774" y2="290.7370251310203" stroke="#333" stroke-width="2.5" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="cloud" data-target="auth" data-type="depends_on"/>
+<line x1="534.849516882576" y1="749.491055869544" x2="1100.2283994916447" y2="630.1955199372998" stroke="#333" stroke-width="2.5" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="collab" data-target="cloud" data-type="depends_on"/>
+<line x1="257.12131712830865" y1="308.4809545168378" x2="167.96556450927062" y2="472.4459501211293" stroke="#2196F3" stroke-width="2" stroke-dasharray="2,2" marker-end="url(#arrowhead)" data-source="graph" data-target="git" data-type="related_to"/>
+<line x1="666.8161696820723" y1="83.92847718663324" x2="123.19882155869296" y2="223.75367836491813" stroke="#2196F3" stroke-width="2" stroke-dasharray="2,2" marker-end="url(#arrowhead)" data-source="auto" data-target="plugins" data-type="related_to"/>
+</g>
+<g class="nodes">
+<g class="node" data-id="m1" data-status="completed" data-type="milestone">
+<rect x="322.17132873603697" y="530.0646255524833" width="80" height="40" rx="5" ry="5" fill="#4CAF50" stroke="#9C27B0" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="362.17132873603697" y="550.0646255524833" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Core Features</text>
+<text x="362.17132873603697" y="570.0646255524833" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="m2" data-status="in_progress" data-type="milestone">
+<rect x="654.6405600690148" y="252.94487723723438" width="80" height="40" rx="5" ry="5" fill="#2196F3" stroke="#9C27B0" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="694.6405600690148" y="272.9448772372344" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Advanced Featur...</text>
+<text x="694.6405600690148" y="292.9448772372344" text-anchor="middle" font-size="16">⚡</text>
+</g>
+<g class="node" data-id="m3" data-status="planned" data-type="milestone">
+<rect x="1078.7703096276935" y="440.65500902214114" width="80" height="40" rx="5" ry="5" fill="#9E9E9E" stroke="#9C27B0" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="1118.7703096276935" y="460.65500902214114" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Future Vision</text>
+<text x="1118.7703096276935" y="480.65500902214114" text-anchor="middle" font-size="16">○</text>
+</g>
+<g class="node" data-id="auth" data-status="completed" data-type="feature">
+<circle cx="1150.0" cy="260.784313330413" r="30" fill="#4CAF50" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="1150.0" y="260.784313330413" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Authentication</text>
+<text x="1150.0" y="280.784313330413" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="git" data-status="completed" data-type="feature">
+<circle cx="153.63466289059232" cy="498.80169444368187" r="30" fill="#4CAF50" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="153.63466289059232" y="498.80169444368187" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Git Integration</text>
+<text x="153.63466289059232" y="518.8016944436819" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="planning" data-status="completed" data-type="feature">
+<circle cx="372.3462942691223" cy="92.91520482982041" r="30" fill="#4CAF50" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="372.3462942691223" y="92.91520482982041" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Planning Sessio...</text>
+<text x="372.3462942691223" y="112.91520482982041" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="graph" data-status="completed" data-type="feature">
+<circle cx="257.12131712830865" cy="308.4809545168378" r="30" fill="#4CAF50" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="257.12131712830865" y="308.4809545168378" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Feature Graphs</text>
+<text x="257.12131712830865" y="328.4809545168378" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="ai" data-status="in_progress" data-type="feature">
+<circle cx="665.9232379115949" cy="666.7051168763766" r="30" fill="#2196F3" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="665.9232379115949" y="666.7051168763766" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">AI Assistant</text>
+<text x="665.9232379115949" y="686.7051168763766" text-anchor="middle" font-size="16">⚡</text>
+</g>
+<g class="node" data-id="plugins" data-status="in_progress" data-type="feature">
+<circle cx="94.1445219913663" cy="231.22680867637678" r="30" fill="#2196F3" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="94.1445219913663" y="231.22680867637678" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Plugin System</text>
+<text x="94.1445219913663" y="251.22680867637678" text-anchor="middle" font-size="16">⚡</text>
+</g>
+<g class="node" data-id="auto" data-status="planned" data-type="feature">
+<circle cx="666.8161696820723" cy="83.92847718663324" r="30" fill="#9E9E9E" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="666.8161696820723" y="83.92847718663324" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Autonomous Agen...</text>
+<text x="666.8161696820723" y="103.92847718663324" text-anchor="middle" font-size="16">○</text>
+</g>
+<g class="node" data-id="cloud" data-status="planned" data-type="feature">
+<circle cx="1129.582080811622" cy="624.0018624584577" r="30" fill="#9E9E9E" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="1129.582080811622" y="624.0018624584577" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Cloud Sync</text>
+<text x="1129.582080811622" y="644.0018624584577" text-anchor="middle" font-size="16">○</text>
+</g>
+<g class="node" data-id="collab" data-status="blocked" data-type="feature">
+<circle cx="534.849516882576" cy="749.491055869544" r="30" fill="#F44336" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="534.849516882576" y="749.491055869544" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Collaboration</text>
+<text x="534.849516882576" y="769.491055869544" text-anchor="middle" font-size="16">🚫</text>
+</g>
+</g>
+</g>
+</svg>
+</div>
+<div class="info-panel">
+
+        <h2>Project Overview</h2>
+        <div class="stats">
+            <p><strong>Total Features:</strong> 12</p>
+            <p><strong>Completed:</strong> 5 (41.7%)</p>
+            <p><strong>In Progress:</strong> 3</p>
+            <p><strong>Blocked:</strong> 1</p>
+            <p><strong>Planned:</strong> 3</p>
+        </div>
+        
+        <h3>Legend</h3>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #4CAF50;"></div>
+                <span>Completed</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #2196F3;"></div>
+                <span>In Progress</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #F44336;"></div>
+                <span>Blocked</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #9E9E9E;"></div>
+                <span>Planned</span>
+            </div>
+        </div>
+        
+        <div id="feature-details" style="display: none;">
+            <h3>Feature Details</h3>
+            <div id="feature-info"></div>
+        </div>
+        
+</div>
+<script>
+
+        const graphData = {"nodes": {"m1": {"name": "Core Features", "description": "Basic functionality", "status": "completed", "type": "milestone", "dependencies": [], "dependents": []}, "m2": {"name": "Advanced Features", "description": "Enhanced capabilities", "status": "in_progress", "type": "milestone", "dependencies": [], "dependents": []}, "m3": {"name": "Future Vision", "description": "Long-term goals", "status": "planned", "type": "milestone", "dependencies": [], "dependents": []}, "auth": {"name": "Authentication", "description": "User authentication system", "status": "completed", "type": "feature", "dependencies": [], "dependents": ["git", "planning", "plugins", "cloud"]}, "git": {"name": "Git Integration", "description": "Natural language git commands", "status": "completed", "type": "feature", "dependencies": ["auth"], "dependents": ["ai"]}, "planning": {"name": "Planning Sessions", "description": "Conversational project planning", "status": "completed", "type": "feature", "dependencies": ["auth"], "dependents": ["graph", "ai"]}, "graph": {"name": "Feature Graphs", "description": "Dependency visualization", "status": "completed", "type": "feature", "dependencies": ["planning"], "dependents": []}, "ai": {"name": "AI Assistant", "description": "Smart code suggestions", "status": "in_progress", "type": "feature", "dependencies": ["planning", "git"], "dependents": ["auto"]}, "plugins": {"name": "Plugin System", "description": "Extensible architecture", "status": "in_progress", "type": "feature", "dependencies": ["auth"], "dependents": []}, "auto": {"name": "Autonomous Agents", "description": "Self-directed development", "status": "planned", "type": "feature", "dependencies": ["ai"], "dependents": []}, "cloud": {"name": "Cloud Sync", "description": "Multi-device synchronization", "status": "planned", "type": "feature", "dependencies": ["auth"], "dependents": ["collab"]}, "collab": {"name": "Collaboration", "description": "Team features", "status": "blocked", "type": "feature", "dependencies": ["cloud"], "dependents": []}}, "relationships": [{"source": "m1", "target": "auth", "type": "includes", "strength": "strong", "description": null}, {"source": "m1", "target": "git", "type": "includes", "strength": "strong", "description": null}, {"source": "m1", "target": "planning", "type": "includes", "strength": "strong", "description": null}, {"source": "m2", "target": "graph", "type": "includes", "strength": "strong", "description": null}, {"source": "m2", "target": "ai", "type": "includes", "strength": "strong", "description": null}, {"source": "m2", "target": "plugins", "type": "includes", "strength": "strong", "description": null}, {"source": "m3", "target": "auto", "type": "includes", "strength": "normal", "description": null}, {"source": "m3", "target": "cloud", "type": "includes", "strength": "normal", "description": null}, {"source": "m3", "target": "collab", "type": "includes", "strength": "normal", "description": null}, {"source": "git", "target": "auth", "type": "depends_on", "strength": "normal", "description": null}, {"source": "planning", "target": "auth", "type": "depends_on", "strength": "normal", "description": null}, {"source": "graph", "target": "planning", "type": "depends_on", "strength": "strong", "description": null}, {"source": "ai", "target": "planning", "type": "depends_on", "strength": "critical", "description": null}, {"source": "ai", "target": "git", "type": "depends_on", "strength": "strong", "description": null}, {"source": "plugins", "target": "auth", "type": "depends_on", "strength": "normal", "description": null}, {"source": "auto", "target": "ai", "type": "depends_on", "strength": "critical", "description": null}, {"source": "cloud", "target": "auth", "type": "depends_on", "strength": "strong", "description": null}, {"source": "collab", "target": "cloud", "type": "depends_on", "strength": "strong", "description": null}, {"source": "graph", "target": "git", "type": "related_to", "strength": "normal", "description": null}, {"source": "auto", "target": "plugins", "type": "related_to", "strength": "normal", "description": null}]};
+        
+        function toggleInfoPanel() {
+            const panel = document.querySelector('.info-panel');
+            panel.classList.toggle('active');
+        }
+        
+        function highlightNode(nodeId) {
+            // Reset all
+            document.querySelectorAll('.node').forEach(n => {
+                n.classList.remove('highlighted', 'dimmed');
+            });
+            document.querySelectorAll('line').forEach(l => {
+                l.classList.remove('highlighted', 'dimmed');
+            });
+            
+            // Highlight selected node
+            const selectedNode = document.querySelector(`.node[data-id="${nodeId}"]`);
+            if (selectedNode) {
+                selectedNode.classList.add('highlighted');
+                
+                // Highlight connected edges
+                document.querySelectorAll(`line[data-source="${nodeId}"], line[data-target="${nodeId}"]`).forEach(line => {
+                    line.classList.add('highlighted');
+                });
+                
+                // Dim unrelated nodes
+                document.querySelectorAll('.node').forEach(node => {
+                    const id = node.getAttribute('data-id');
+                    if (id !== nodeId && !isConnected(id, nodeId)) {
+                        node.classList.add('dimmed');
+                    }
+                });
+                
+                // Show feature details
+                showFeatureDetails(nodeId);
+            }
+        }
+        
+        function isConnected(nodeId1, nodeId2) {
+            return graphData.relationships.some(rel => 
+                (rel.source === nodeId1 && rel.target === nodeId2) ||
+                (rel.source === nodeId2 && rel.target === nodeId1)
+            );
+        }
+        
+        function showFeatureDetails(nodeId) {
+            const node = graphData.nodes[nodeId];
+            if (!node) return;
+            
+            const detailsDiv = document.getElementById('feature-details');
+            const infoDiv = document.getElementById('feature-info');
+            
+            infoDiv.innerHTML = `
+                <p><strong>Name:</strong> ${node.name}</p>
+                <p><strong>Description:</strong> ${node.description}</p>
+                <p><strong>Status:</strong> ${node.status}</p>
+                <p><strong>Type:</strong> ${node.type}</p>
+                <p><strong>Dependencies:</strong> ${node.dependencies.join(', ') || 'None'}</p>
+                <p><strong>Dependents:</strong> ${node.dependents.join(', ') || 'None'}</p>
+            `;
+            
+            detailsDiv.style.display = 'block';
+        }
+        
+        function resetHighlight() {
+            document.querySelectorAll('.node').forEach(n => {
+                n.classList.remove('highlighted', 'dimmed');
+            });
+            document.querySelectorAll('line').forEach(l => {
+                l.classList.remove('highlighted', 'dimmed');
+            });
+            document.getElementById('feature-details').style.display = 'none';
+        }
+        
+        function filterByStatus(status) {
+            document.querySelectorAll('.node').forEach(node => {
+                if (node.getAttribute('data-status') === status) {
+                    node.style.display = 'block';
+                } else {
+                    node.style.display = 'none';
+                }
+            });
+            
+            updateEdgeVisibility();
+        }
+        
+        function showAll() {
+            document.querySelectorAll('.node').forEach(node => {
+                node.style.display = 'block';
+            });
+            document.querySelectorAll('line').forEach(line => {
+                line.style.display = 'block';
+            });
+        }
+        
+        function updateEdgeVisibility() {
+            document.querySelectorAll('line').forEach(line => {
+                const source = line.getAttribute('data-source');
+                const target = line.getAttribute('data-target');
+                const sourceNode = document.querySelector(`.node[data-id="${source}"]`);
+                const targetNode = document.querySelector(`.node[data-id="${target}"]`);
+                
+                if (sourceNode && targetNode && 
+                    sourceNode.style.display !== 'none' && 
+                    targetNode.style.display !== 'none') {
+                    line.style.display = 'block';
+                } else {
+                    line.style.display = 'none';
+                }
+            });
+        }
+        
+        // Add click handlers to nodes
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.node').forEach(node => {
+                node.addEventListener('click', (e) => {
+                    const nodeId = node.getAttribute('data-id');
+                    highlightNode(nodeId);
+                    e.stopPropagation();
+                });
+            });
+            
+            // Click on empty space to reset
+            document.querySelector('svg').addEventListener('click', () => {
+                resetHighlight();
+            });
+        });
+        
+</script>
+</body>
+</html>

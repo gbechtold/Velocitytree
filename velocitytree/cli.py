@@ -5,6 +5,8 @@ Command-line interface for Velocitytree.
 
 import click
 import sys
+import subprocess
+import time
 from pathlib import Path
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -17,6 +19,9 @@ from .ai import AIAssistant
 from .workflows import WorkflowManager
 from .version import version_info
 from .onboarding import create_onboarding_command
+from .web_server import FeatureGraphWebServer
+from .git_integration import GitFeatureTracker, GitWorkflowIntegration
+from .progress_tracking import ProgressCalculator
 
 console = Console()
 
@@ -386,6 +391,895 @@ def test(ctx):
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
         console.print("[yellow]Make sure your AI provider is properly configured.[/yellow]")
+
+
+@cli.group()
+def git():
+    """Git-related commands with natural language support."""
+    pass
+
+
+@git.command('feature')
+@click.argument('description')
+@click.option('--prefix', '-p', default='feature/', help='Branch prefix')
+@click.option('--ticket', '-t', help='Ticket reference (e.g., #123, JIRA-456)')
+@click.pass_context
+def create_feature(ctx, description, prefix, ticket):
+    """Create a feature branch from natural language description."""
+    from .git_manager import GitManager
+    
+    # Add ticket reference to description if provided
+    if ticket:
+        description = f"{ticket} {description}"
+    
+    try:
+        git_mgr = GitManager()
+        branch_name = git_mgr.create_feature_branch(description, prefix=prefix)
+        console.print(f"[green]✓[/green] Created and switched to branch: [blue]{branch_name}[/blue]")
+        
+        # Show what to do next
+        console.print("\n[yellow]Next steps:[/yellow]")
+        console.print("1. Make your changes")
+        console.print("2. Use 'vtree git commit' to generate a smart commit message")
+        console.print("3. Push your branch and create a pull request")
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Failed to create feature branch: {e}", exc_info=True)
+
+
+@git.command('commit')
+@click.option('--message', '-m', help='Custom commit message')
+@click.option('--type', '-t', type=click.Choice(['feat', 'fix', 'docs', 'test', 'refactor', 'chore']), 
+              help='Commit type for conventional format')
+@click.pass_context
+def smart_commit(ctx, message, type):
+    """Generate and create a smart commit based on changes."""
+    from .git_manager import GitManager
+    
+    try:
+        git_mgr = GitManager()
+        
+        # Analyze changes
+        console.print("[blue]Analyzing changes...[/blue]")
+        changes = git_mgr.analyze_changes()
+        
+        # Generate commit message
+        if message:
+            commit_msg = git_mgr.generate_commit_message(custom_message=message)
+        else:
+            commit_msg = git_mgr.generate_commit_message(changes=changes)
+            
+        # Show analysis results
+        console.print("\n[cyan]Change Analysis:[/cyan]")
+        console.print(f"Files changed: {len(changes.files_changed)}")
+        console.print(f"Insertions: [green]+{changes.insertions}[/green]")
+        console.print(f"Deletions: [red]-{changes.deletions}[/red]")
+        console.print(f"Impact level: {changes.impact_level}")
+        console.print(f"Change type: {changes.change_type}")
+        
+        console.print(f"\n[yellow]Suggested commit message:[/yellow]")
+        console.print(commit_msg)
+        
+        # Confirm or edit
+        if click.confirm("\nUse this commit message?"):
+            # Actually create the commit
+            import subprocess
+            result = subprocess.run(['git', 'commit', '-m', commit_msg], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                console.print("[green]✓[/green] Commit created successfully!")
+            else:
+                console.print(f"[red]Error creating commit:[/red] {result.stderr}")
+        else:
+            console.print("[yellow]Commit cancelled. You can create it manually.[/yellow]")
+            
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Failed to create commit: {e}", exc_info=True)
+
+
+@git.command('tag')
+@click.option('--type', '-t', type=click.Choice(['major', 'minor', 'patch']), 
+              default='patch', help='Version bump type')
+@click.option('--version', '-v', help='Custom version tag')
+@click.pass_context
+def create_tag(ctx, type, version):
+    """Create a semantic version tag."""
+    from .git_manager import GitManager
+    
+    try:
+        git_mgr = GitManager()
+        
+        if version:
+            new_tag = git_mgr.tag_version(custom_version=version)
+        else:
+            new_tag = git_mgr.tag_version(version_type=type)
+            
+        console.print(f"[green]✓[/green] Created tag: [blue]{new_tag}[/blue]")
+        console.print("\nTo push this tag to remote:")
+        console.print(f"[cyan]git push origin {new_tag}[/cyan]")
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Failed to create tag: {e}", exc_info=True)
+
+
+@git.command('analyze')
+@click.pass_context
+def analyze_changes(ctx):
+    """Analyze current git changes in detail."""
+    from .git_manager import GitManager
+    
+    try:
+        git_mgr = GitManager()
+        changes = git_mgr.analyze_changes()
+        
+        # Create a detailed table
+        table = Table(title="Git Change Analysis")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="yellow")
+        
+        table.add_row("Files Changed", str(len(changes.files_changed)))
+        table.add_row("Total Insertions", f"[green]+{changes.insertions}[/green]")
+        table.add_row("Total Deletions", f"[red]-{changes.deletions}[/red]")
+        table.add_row("Change Type", changes.change_type)
+        table.add_row("Impact Level", changes.impact_level)
+        table.add_row("Components Affected", ", ".join(changes.components_affected))
+        
+        console.print(table)
+        
+        # Show files changed
+        if changes.files_changed:
+            console.print("\n[cyan]Files Changed:[/cyan]")
+            for file in changes.files_changed:
+                console.print(f"  • {file}")
+        
+        # Show suggested commit message
+        console.print(f"\n[yellow]Suggested Commit Message:[/yellow]")
+        console.print(changes.suggested_message)
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Failed to analyze changes: {e}", exc_info=True)
+
+
+@cli.group()
+def plan():
+    """Project planning commands."""
+    pass
+
+
+@cli.group()
+def visualize():
+    """Visualization commands."""
+    pass
+
+
+@plan.command('start')
+@click.option('--template', '-t', help='Planning template to use')
+@click.option('--name', '-n', help='Project name')
+@click.pass_context
+def start_planning(ctx, template, name):
+    """Start a new project planning session."""
+    from .planning_session import PlanningSession
+    from .conversation_engine import ConversationEngine
+    from prompt_toolkit import prompt
+    from prompt_toolkit.history import InMemoryHistory
+    
+    # Get project name if not provided
+    if not name:
+        name = prompt("What's the name of your project? ")
+    
+    # Create planning session
+    session = PlanningSession(ctx.obj['config'])
+    result = session.start_session(name, template=template)
+    
+    console.print(f"[green]✓[/green] Started planning session: [blue]{result['session_id']}[/blue]")
+    console.print(f"\n[yellow]{result['greeting']}[/yellow]\n")
+    
+    # Create conversation engine
+    engine = ConversationEngine()
+    history = InMemoryHistory()
+    
+    # Interactive planning loop
+    while session.state.value == 'active':
+        try:
+            # Get user input
+            user_input = prompt("> ", history=history)
+            
+            if not user_input.strip():
+                continue
+            
+            # Add user message
+            session.add_message(role="user", content=user_input)
+            
+            # Process response
+            response = session._process_user_input(user_input)
+            
+            # Display response
+            console.print(f"\n[cyan]{response}[/cyan]\n")
+            
+            # Check for session completion
+            if session.stage.value == 'finalization' and 'export' in user_input.lower():
+                export_format = 'markdown'
+                if 'json' in user_input.lower():
+                    export_format = 'json'
+                
+                # Export plan
+                exported = session.export_plan(format=export_format)
+                filename = f"{session.project_plan.name.replace(' ', '_')}_{session.session_id[:8]}.{export_format[:2]}"
+                
+                with open(filename, 'w') as f:
+                    f.write(exported)
+                
+                console.print(f"[green]✓[/green] Plan exported to: [blue]{filename}[/blue]")
+                session.complete_session()
+                break
+                
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Session paused. Resume with 'vtree plan resume {}'[/yellow]".format(
+                result['session_id']
+            ))
+            session.pause_session()
+            break
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {str(e)}")
+            logger.error(f"Planning session error: {e}", exc_info=True)
+
+
+@plan.command('resume')
+@click.argument('session_id')
+@click.pass_context
+def resume_planning(ctx, session_id):
+    """Resume a paused planning session."""
+    from .planning_session import PlanningSession
+    from .conversation_engine import ConversationEngine
+    from prompt_toolkit import prompt
+    from prompt_toolkit.history import InMemoryHistory
+    
+    try:
+        # Load session
+        session = PlanningSession.load_session(ctx.obj['config'], session_id)
+        result = session.resume_session()
+        
+        console.print(f"[green]✓[/green] Resumed session: [blue]{session_id}[/blue]")
+        console.print(f"\n[yellow]{result['greeting']}[/yellow]\n")
+        
+        # Create conversation engine
+        engine = ConversationEngine()
+        history = InMemoryHistory()
+        
+        # Resume interactive planning
+        while session.state.value == 'active':
+            try:
+                user_input = prompt("> ", history=history)
+                
+                if not user_input.strip():
+                    continue
+                
+                session.add_message(role="user", content=user_input)
+                response = session._process_user_input(user_input)
+                console.print(f"\n[cyan]{response}[/cyan]\n")
+                
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Session paused.[/yellow]")
+                session.pause_session()
+                break
+                
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Failed to resume session: {e}", exc_info=True)
+
+
+@plan.command('list')
+@click.option('--status', '-s', help='Filter by status (active, paused, completed)')
+@click.pass_context
+def list_planning_sessions(ctx):
+    """List all planning sessions."""
+    from pathlib import Path
+    import json
+    
+    session_dir = Path.home() / '.velocitytree' / 'planning_sessions'
+    
+    if not session_dir.exists():
+        console.print("[yellow]No planning sessions found.[/yellow]")
+        return
+    
+    table = Table(title="Planning Sessions")
+    table.add_column("Session ID", style="cyan")
+    table.add_column("Project Name", style="yellow")
+    table.add_column("Status", style="green")
+    table.add_column("Stage", style="blue")
+    table.add_column("Created", style="magenta")
+    
+    sessions = []
+    for session_file in session_dir.glob("*.json"):
+        try:
+            with open(session_file, 'r') as f:
+                data = json.load(f)
+                sessions.append(data)
+        except Exception as e:
+            logger.error(f"Error reading session file {session_file}: {e}")
+    
+    # Filter by status if specified
+    if ctx.params['status']:
+        sessions = [s for s in sessions if s.get('state') == ctx.params['status']]
+    
+    # Sort by creation date
+    sessions.sort(key=lambda x: x.get('metadata', {}).get('created_at', ''), reverse=True)
+    
+    for session_data in sessions:
+        session_id = session_data.get('session_id', 'Unknown')
+        project_name = session_data.get('project_plan', {}).get('name', 'Unnamed')
+        status = session_data.get('state', 'unknown')
+        stage = session_data.get('stage', 'unknown')
+        created = session_data.get('metadata', {}).get('created_at', 'Unknown')
+        
+        if isinstance(created, str) and len(created) > 10:
+            created = created[:10]  # Just show date
+        
+        table.add_row(
+            session_id[:8] + "...",
+            project_name,
+            status,
+            stage.replace('_', ' ').title(),
+            created
+        )
+    
+    console.print(table)
+
+
+@plan.command('show')
+@click.argument('session_id')
+@click.pass_context
+def show_planning_session(ctx, session_id):
+    """Show details of a planning session."""
+    from .planning_session import PlanningSession
+    
+    try:
+        session = PlanningSession.load_session(ctx.obj['config'], session_id)
+        context = session.get_context()
+        
+        console.print(f"[blue]Planning Session:[/blue] {session_id}")
+        console.print(f"[yellow]Project:[/yellow] {context.get('project_name', 'Unknown')}")
+        console.print(f"[green]Status:[/green] {context.get('state')}")
+        console.print(f"[cyan]Stage:[/cyan] {context.get('stage')}")
+        
+        if context.get('plan_summary'):
+            summary = context['plan_summary']
+            console.print("\n[magenta]Plan Summary:[/magenta]")
+            console.print(f"Goals: {summary.get('goals_count', 0)}")
+            console.print(f"Features: {summary.get('features_count', 0)}")
+            console.print(f"Milestones: {summary.get('milestones_count', 0)}")
+            console.print(f"Tech Stack: {'✓' if summary.get('has_tech_stack') else '✗'}")
+            console.print(f"Timeline: {'✓' if summary.get('has_timeline') else '✗'}")
+            console.print(f"Resources: {'✓' if summary.get('has_resources') else '✗'}")
+        
+        # Show recent messages
+        recent_messages = context.get('messages', [])[-5:]
+        if recent_messages:
+            console.print("\n[yellow]Recent Conversation:[/yellow]")
+            for msg in recent_messages:
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')
+                if len(content) > 100:
+                    content = content[:100] + "..."
+                console.print(f"[dim]{role}:[/dim] {content}")
+                
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+
+
+@plan.command('export')
+@click.argument('session_id')
+@click.option('--format', '-f', type=click.Choice(['markdown', 'json']), default='markdown')
+@click.option('--output', '-o', help='Output file path')
+@click.pass_context
+def export_planning_session(ctx, session_id, format, output):
+    """Export a planning session to a file."""
+    from .planning_session import PlanningSession
+    
+    try:
+        session = PlanningSession.load_session(ctx.obj['config'], session_id)
+        
+        # Export plan
+        exported = session.export_plan(format=format)
+        
+        # Determine output file
+        if not output:
+            output = f"{session.project_plan.name.replace(' ', '_')}_{session_id[:8]}.{format[:2]}"
+        
+        # Save to file
+        with open(output, 'w') as f:
+            f.write(exported)
+        
+        console.print(f"[green]✓[/green] Exported to: [blue]{output}[/blue]")
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+
+
+@cli.group()
+def git():
+    """Git integration commands."""
+    pass
+
+
+@git.command('sync')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--watch', '-w', is_flag=True, help='Watch repository for changes')
+@click.pass_context
+def git_sync(ctx, project, watch):
+    """Sync feature status with git activity."""
+    from .core import VelocityTree
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        git_tracker = GitFeatureTracker(project, vt.feature_graph)
+        
+        # Scan repository and update features
+        console.print("[blue]Scanning repository for feature activity...[/blue]")
+        updates = git_tracker.update_feature_status()
+        
+        if updates:
+            console.print(f"[green]✓[/green] Updated {len(updates)} features:")
+            for feature_id, new_status in updates.items():
+                feature = vt.feature_graph.features[feature_id]
+                console.print(f"  • {feature.name} ({feature_id}): [yellow]{new_status}[/yellow]")
+        else:
+            console.print("[yellow]No feature updates detected[/yellow]")
+        
+        # Start monitoring if requested
+        if watch:
+            console.print("\n[blue]Starting repository monitoring...[/blue]")
+            console.print("[yellow]Press Ctrl+C to stop[/yellow]")
+            
+            def on_update(updates):
+                console.print(f"\n[green]Detected changes:[/green]")
+                for feature_id, new_status in updates.items():
+                    feature = vt.feature_graph.features[feature_id]
+                    console.print(f"  • {feature.name}: {new_status}")
+            
+            git_tracker.monitor_repository(callback=on_update)
+            
+            # Keep the process running
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Monitoring stopped[/yellow]")
+        
+        # Save updated graph
+        vt.save_state()
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Git sync error: {e}", exc_info=True)
+
+
+@git.command('report')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.pass_context
+def git_report(ctx, project, format):
+    """Generate feature progress report from git activity."""
+    from .core import VelocityTree
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        git_integration = GitWorkflowIntegration(project, vt.feature_graph)
+        
+        # Generate report
+        report = git_integration.generate_feature_report()
+        
+        if format == 'json':
+            import json
+            console.print(json.dumps(report, indent=2, default=str))
+        else:
+            # Display as table
+            table = Table(title="Feature Progress Report")
+            table.add_column("Feature", style="cyan")
+            table.add_column("Status", style="yellow")
+            table.add_column("Commits", style="green")
+            table.add_column("Last Activity", style="blue")
+            table.add_column("Branch", style="magenta")
+            table.add_column("Merged", style="red")
+            
+            for feature_id, feature_data in report['features'].items():
+                table.add_row(
+                    f"{feature_data['name']} ({feature_id})",
+                    feature_data['status'],
+                    str(feature_data['commits']),
+                    str(feature_data['last_activity'])[:10] if feature_data['last_activity'] else "Never",
+                    feature_data['branch'] or "None",
+                    "Yes" if feature_data['is_merged'] else "No"
+                )
+            
+            console.print(table)
+            
+            # Print summary
+            summary = report['summary']
+            console.print(f"\n[bold]Summary:[/bold]")
+            console.print(f"Total Features: {summary['total_features']}")
+            console.print(f"Active: [green]{summary['active_features']}[/green]")
+            console.print(f"Completed: [blue]{summary['completed_features']}[/blue]")
+            console.print(f"Stale: [yellow]{summary['stale_features']}[/yellow]")
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Git report error: {e}", exc_info=True)
+
+
+@git.command('feature-branch')
+@click.argument('feature_id')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.pass_context
+def create_feature_branch(ctx, feature_id, project):
+    """Create a git branch for a feature."""
+    from .core import VelocityTree
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        git_integration = GitWorkflowIntegration(project, vt.feature_graph)
+        
+        # Create branch
+        branch_name = git_integration.create_feature_branch(feature_id)
+        console.print(f"[green]✓[/green] Created branch: [blue]{branch_name}[/blue]")
+        
+        # Show feature info
+        feature = vt.feature_graph.features[feature_id]
+        console.print(f"\nFeature: [cyan]{feature.name}[/cyan]")
+        console.print(f"Status: [yellow]{feature.status}[/yellow]")
+        
+        # Check out the branch
+        if click.confirm("Check out the new branch?"):
+            import subprocess
+            subprocess.run(['git', 'checkout', branch_name], cwd=project)
+            console.print(f"[green]✓[/green] Switched to branch: {branch_name}")
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Feature branch error: {e}", exc_info=True)
+
+
+@git.command('suggest')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.pass_context
+def suggest_relationships(ctx, project):
+    """Suggest feature relationships based on git activity."""
+    from .core import VelocityTree
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        git_tracker = GitFeatureTracker(project, vt.feature_graph)
+        
+        # Get suggestions
+        suggestions = git_tracker.suggest_feature_relationships()
+        
+        if not suggestions:
+            console.print("[yellow]No relationship suggestions found[/yellow]")
+            return
+        
+        console.print("[blue]Suggested feature relationships:[/blue]\n")
+        
+        for source, target, rel_type in suggestions:
+            if source in vt.feature_graph.features and target in vt.feature_graph.features:
+                source_feature = vt.feature_graph.features[source]
+                target_feature = vt.feature_graph.features[target]
+                
+                console.print(f"[cyan]{source_feature.name}[/cyan] {rel_type} [cyan]{target_feature.name}[/cyan]")
+                
+                if click.confirm("Add this relationship?"):
+                    from .feature_graph import RelationType
+                    rel_type_enum = RelationType[rel_type]
+                    vt.feature_graph.add_relationship(source, target, rel_type_enum)
+                    console.print("[green]✓[/green] Relationship added")
+        
+        # Save if any changes were made
+        vt.save_state()
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Relationship suggestion error: {e}", exc_info=True)
+
+
+@cli.group()
+def progress():
+    """Progress tracking and velocity commands."""
+    pass
+
+
+@progress.command('status')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--feature', '-f', help='Show progress for specific feature')
+@click.option('--format', type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.pass_context
+def progress_status(ctx, project, feature, format):
+    """Show progress status for features or project."""
+    from .core import VelocityTree
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        calculator = ProgressCalculator(vt.feature_graph)
+        
+        if feature:
+            # Show specific feature progress
+            progress = calculator.calculate_feature_progress(feature)
+            
+            if format == 'json':
+                import json
+                console.print(json.dumps(progress.__dict__, default=str, indent=2))
+            else:
+                console.print(f"\n[cyan]Feature: {progress.name}[/cyan]")
+                console.print(f"Status: [yellow]{progress.status}[/yellow]")
+                console.print(f"Completion: [green]{progress.completion_percentage}%[/green]")
+                console.print(f"Dependencies: {progress.dependencies_completed}/{progress.total_dependencies}")
+                
+                if progress.blockers:
+                    console.print(f"\n[red]Blockers:[/red]")
+                    for blocker in progress.blockers:
+                        blocker_feature = vt.feature_graph.features[blocker]
+                        console.print(f"  • {blocker_feature.name} ({blocker})")
+                
+                if progress.estimated_completion_date:
+                    console.print(f"\nEstimated completion: [blue]{progress.estimated_completion_date.strftime('%Y-%m-%d')}[/blue]")
+                
+                if progress.critical_path:
+                    console.print("\n[red]⚠ This feature is on the critical path[/red]")
+        else:
+            # Show overall project progress
+            project_progress = calculator.calculate_project_progress()
+            
+            if format == 'json':
+                import json
+                # Convert burndown data to serializable format
+                burndown_serializable = [
+                    (date.isoformat(), percentage) 
+                    for date, percentage in project_progress.burndown_data
+                ]
+                project_dict = project_progress.__dict__.copy()
+                project_dict['burndown_data'] = burndown_serializable
+                console.print(json.dumps(project_dict, default=str, indent=2))
+            else:
+                console.print("\n[bold]Project Progress[/bold]")
+                console.print(f"Overall Completion: [green]{project_progress.total_completion}%[/green]")
+                console.print(f"Features: {project_progress.features_completed}/{project_progress.total_features}")
+                console.print(f"Milestones: {project_progress.milestones_completed}/{project_progress.total_milestones}")
+                
+                # Progress bar
+                progress_bar = "█" * int(project_progress.total_completion / 5) + "░" * (20 - int(project_progress.total_completion / 5))
+                console.print(f"\nProgress: [{progress_bar}]")
+                
+                console.print(f"\nCurrent Velocity: [cyan]{project_progress.current_velocity:.2f}[/cyan] features/day")
+                console.print(f"Average Velocity: [cyan]{project_progress.average_velocity:.2f}[/cyan] features/day")
+                
+                if project_progress.estimated_completion_date:
+                    console.print(f"\nEstimated Completion: [blue]{project_progress.estimated_completion_date.strftime('%Y-%m-%d')}[/blue]")
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Progress status error: {e}", exc_info=True)
+
+
+@progress.command('velocity')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.pass_context
+def velocity_report(ctx, project):
+    """Show velocity metrics and trends."""
+    from .core import VelocityTree
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        calculator = ProgressCalculator(vt.feature_graph)
+        
+        # Get velocity report
+        report = calculator.get_velocity_report()
+        
+        console.print("\n[bold]Velocity Report[/bold]")
+        
+        # Current velocity
+        console.print("\n[cyan]Current Velocity:[/cyan]")
+        console.print(f"  Daily:   {report['current_velocity']['daily']:.2f} features/day")
+        console.print(f"  Weekly:  {report['current_velocity']['weekly']:.2f} features/week")
+        console.print(f"  Monthly: {report['current_velocity']['monthly']:.2f} features/month")
+        
+        # Trend
+        trend_color = {
+            "improving": "green",
+            "stable": "yellow",
+            "declining": "red"
+        }.get(report['trend'], "white")
+        console.print(f"\nTrend: [{trend_color}]{report['trend'].upper()}[/{trend_color}]")
+        console.print(f"Predicted Future Velocity: {report['predicted_velocity']:.2f} features/day")
+        
+        # Bottlenecks
+        if report['bottlenecks']:
+            console.print("\n[red]Bottlenecks:[/red]")
+            table = Table()
+            table.add_column("Feature", style="cyan")
+            table.add_column("Status", style="yellow")
+            table.add_column("Blocking", style="red")
+            
+            for bottleneck in report['bottlenecks'][:5]:  # Show top 5
+                feature = vt.feature_graph.features[bottleneck['feature_id']]
+                table.add_row(
+                    feature.name,
+                    feature.status,
+                    str(bottleneck['blocking_count'])
+                )
+            
+            console.print(table)
+        
+        # Recommendations
+        if report['recommendations']:
+            console.print("\n[blue]Recommendations:[/blue]")
+            for i, rec in enumerate(report['recommendations'], 1):
+                console.print(f"  {i}. {rec}")
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Velocity report error: {e}", exc_info=True)
+
+
+@progress.command('burndown')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--output', '-o', type=click.Path(), help='Save burndown chart to file')
+@click.option('--days', '-d', type=int, default=30, help='Number of days to show')
+@click.pass_context
+def burndown_chart(ctx, project, output, days):
+    """Generate burndown chart for project."""
+    from .core import VelocityTree
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        calculator = ProgressCalculator(vt.feature_graph)
+        
+        # Get project progress
+        project_progress = calculator.calculate_project_progress()
+        
+        # Display or save burndown data
+        if output:
+            # Generate chart image
+            import matplotlib.pyplot as plt
+            from matplotlib.dates import DateFormatter
+            
+            dates = [data[0] for data in project_progress.burndown_data[-days:]]
+            percentages = [100 - data[1] for data in project_progress.burndown_data[-days:]]  # Invert for burndown
+            
+            plt.figure(figsize=(10, 6))
+            plt.plot(dates, percentages, 'b-', linewidth=2, label='Actual')
+            
+            # Add ideal burndown line
+            ideal_rate = percentages[0] / len(dates)
+            ideal_line = [percentages[0] - (i * ideal_rate) for i in range(len(dates))]
+            plt.plot(dates, ideal_line, 'r--', linewidth=1, label='Ideal')
+            
+            plt.title('Project Burndown Chart')
+            plt.xlabel('Date')
+            plt.ylabel('Work Remaining (%)')
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            
+            # Format dates
+            ax = plt.gca()
+            ax.xaxis.set_major_formatter(DateFormatter('%m/%d'))
+            plt.xticks(rotation=45)
+            
+            plt.tight_layout()
+            plt.savefig(output)
+            console.print(f"[green]✓[/green] Burndown chart saved to: {output}")
+        else:
+            # Display in terminal
+            console.print("\n[bold]Burndown Chart (Text)[/bold]")
+            console.print("Work Remaining (%)")
+            
+            max_width = 60
+            for date, completion in project_progress.burndown_data[-days:]:
+                remaining = 100 - completion
+                bar_width = int((remaining / 100) * max_width)
+                bar = "█" * bar_width + "░" * (max_width - bar_width)
+                console.print(f"{date.strftime('%m/%d')} [{bar}] {remaining:.1f}%")
+            
+            if project_progress.estimated_completion_date:
+                console.print(f"\nEstimated completion: [blue]{project_progress.estimated_completion_date.strftime('%Y-%m-%d')}[/blue]")
+    
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Burndown chart error: {e}", exc_info=True)
+
+
+@progress.command('milestones')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.pass_context
+def milestone_progress(ctx, project):
+    """Show progress for project milestones."""
+    from .core import VelocityTree
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        calculator = ProgressCalculator(vt.feature_graph)
+        
+        # Group features by milestone
+        milestones = calculator._group_features_by_milestone()
+        
+        if not milestones:
+            console.print("[yellow]No milestones found[/yellow]")
+            return
+        
+        # Calculate progress for each milestone
+        table = Table(title="Milestone Progress")
+        table.add_column("Milestone", style="cyan")
+        table.add_column("Progress", style="green")
+        table.add_column("Features", style="yellow")
+        table.add_column("Critical", style="red")
+        table.add_column("At Risk", style="orange1")
+        table.add_column("ETA", style="blue")
+        
+        for milestone_id, features in milestones.items():
+            milestone_feature = vt.feature_graph.features[milestone_id]
+            progress = calculator.calculate_milestone_progress(features)
+            
+            # Progress bar
+            bar_width = 20
+            filled = int((progress.completion_percentage / 100) * bar_width)
+            progress_bar = "█" * filled + "░" * (bar_width - filled)
+            
+            eta_str = progress.estimated_completion_date.strftime('%Y-%m-%d') if progress.estimated_completion_date else "N/A"
+            
+            table.add_row(
+                milestone_feature.name,
+                f"[{progress_bar}] {progress.completion_percentage:.1f}%",
+                f"{progress.features_completed}/{progress.total_features}",
+                str(len(progress.critical_features)),
+                str(len(progress.at_risk_features)),
+                eta_str
+            )
+        
+        console.print(table)
+        
+        # Show detailed info for critical milestones
+        critical_milestones = [
+            (mid, calculator.calculate_milestone_progress(features))
+            for mid, features in milestones.items()
+        ]
+        critical_milestones.sort(key=lambda x: len(x[1].at_risk_features), reverse=True)
+        
+        if critical_milestones and critical_milestones[0][1].at_risk_features:
+            console.print("\n[red]⚠ Critical Milestone:[/red]")
+            milestone_id, progress = critical_milestones[0]
+            milestone_feature = vt.feature_graph.features[milestone_id]
+            console.print(f"[cyan]{milestone_feature.name}[/cyan] has {len(progress.at_risk_features)} at-risk features")
+            
+            console.print("\nAt-risk features:")
+            for feature_id in progress.at_risk_features[:5]:  # Show top 5
+                feature = vt.feature_graph.features[feature_id]
+                console.print(f"  • {feature.name} ({feature.status})")
+    
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Milestone progress error: {e}", exc_info=True)
 
 
 @cli.group()
@@ -765,6 +1659,252 @@ def config(ctx, output, format):
             output_text = toml.dumps(config_data)
         
         console.print(output_text)
+
+
+@visualize.command('graph')
+@click.option('--output', '-o', type=click.Path(), help='Output file path')
+@click.option('--format', '-f', type=click.Choice(['svg', 'html']), default='html', 
+              help='Output format')
+@click.option('--layout', '-l', type=click.Choice(['hierarchical', 'spring', 'circular']), 
+              default='hierarchical', help='Graph layout algorithm')
+@click.option('--session', '-s', help='Planning session ID to visualize')
+@click.option('--title', '-t', default='Feature Graph', help='Visualization title')
+@click.option('--interactive/--static', default=True, help='Enable interactive features')
+@click.pass_context
+def visualize_graph(ctx, output, format, layout, session, title, interactive):
+    """Generate visualization of feature dependencies."""
+    from .feature_graph import FeatureGraph
+    from .visualization import FeatureGraphVisualizer
+    
+    # Create or load feature graph
+    if session:
+        # Load from planning session
+        from .planning_session import PlanningSession
+        try:
+            session_obj = PlanningSession.load_session(session, ctx.obj['config'])
+            if not session_obj.project_plan:
+                console.print("[red]Error:[/red] Session has no project plan")
+                return
+            
+            graph = FeatureGraph(f"session_{session}")
+            graph.from_project_plan(session_obj.project_plan)
+        except Exception as e:
+            console.print(f"[red]Error loading session:[/red] {str(e)}")
+            return
+    else:
+        # Create example graph for demo
+        graph = FeatureGraph("demo_project")
+        
+        # Add sample features
+        from .feature_graph import FeatureNode
+        
+        features = [
+            FeatureNode(id="auth", name="Authentication", description="User authentication system",
+                       type="feature", status="completed"),
+            FeatureNode(id="db", name="Database", description="Database setup",
+                       type="feature", status="completed"),
+            FeatureNode(id="api", name="API", description="REST API",
+                       type="feature", status="in_progress"),
+            FeatureNode(id="frontend", name="Frontend", description="React frontend",
+                       type="feature", status="planned"),
+            FeatureNode(id="admin", name="Admin Panel", description="Admin interface",
+                       type="feature", status="planned"),
+            FeatureNode(id="reports", name="Reports", description="Reporting system",
+                       type="feature", status="blocked"),
+        ]
+        
+        for feature in features:
+            graph.add_feature(feature)
+        
+        # Add relationships
+        graph.add_dependency("api", "auth")
+        graph.add_dependency("api", "db")
+        graph.add_dependency("frontend", "api")
+        graph.add_dependency("admin", "frontend")
+        graph.add_dependency("reports", "api")
+    
+    # Create visualizer
+    visualizer = FeatureGraphVisualizer(graph, layout=layout)
+    
+    # Generate output
+    if not output:
+        output = f"{graph.project_id}_graph.{format}"
+    
+    try:
+        if format == 'svg':
+            svg_content = visualizer.generate_svg(output_path=Path(output))
+        else:  # html
+            html_content = visualizer.generate_html(
+                output_path=Path(output),
+                title=title,
+                interactive=interactive
+            )
+        
+        console.print(f"[green]✓[/green] Visualization saved to: [blue]{output}[/blue]")
+        
+        # Optionally open in browser
+        if format == 'html' and interactive:
+            import webbrowser
+            if click.confirm("Open in browser?"):
+                webbrowser.open(f"file://{Path(output).resolve()}")
+                
+    except Exception as e:
+        console.print(f"[red]Error generating visualization:[/red] {str(e)}")
+        logger.error(f"Visualization error: {e}", exc_info=True)
+
+
+@visualize.command('dependencies')
+@click.argument('feature_id')
+@click.option('--depth', '-d', type=int, default=2, help='Dependency depth to show')
+@click.option('--format', '-f', type=click.Choice(['tree', 'list']), default='tree')
+@click.pass_context
+def show_dependencies(ctx, feature_id, depth, format):
+    """Show feature dependencies."""
+    from .feature_graph import FeatureGraph
+    
+    # For demo, create sample graph
+    graph = FeatureGraph("demo")
+    
+    # Add sample features (same as above)
+    from .feature_graph import FeatureNode, RelationType, RelationshipStrength
+    
+    features = [
+        FeatureNode(id="auth", name="Authentication", type="feature", status="completed"),
+        FeatureNode(id="db", name="Database", type="feature", status="completed"),
+        FeatureNode(id="api", name="API", type="feature", status="in_progress"),
+        FeatureNode(id="frontend", name="Frontend", type="feature", status="planned"),
+        FeatureNode(id="admin", name="Admin Panel", type="feature", status="planned"),
+    ]
+    
+    for feature in features:
+        graph.add_feature(feature)
+    
+    # Add relationships
+    graph.add_relationship("api", "auth", RelationType.DEPENDS_ON, RelationshipStrength.CRITICAL)
+    graph.add_relationship("api", "db", RelationType.DEPENDS_ON, RelationshipStrength.CRITICAL)
+    graph.add_relationship("frontend", "api", RelationType.DEPENDS_ON, RelationshipStrength.STRONG)
+    graph.add_relationship("admin", "frontend", RelationType.DEPENDS_ON, RelationshipStrength.NORMAL)
+    
+    # Get dependencies
+    if feature_id not in graph.features:
+        console.print(f"[red]Error:[/red] Feature '{feature_id}' not found")
+        return
+    
+    # Get all dependencies
+    all_deps = graph.get_all_dependencies(feature_id, recursive=True)
+    direct_deps = graph.get_dependencies(feature_id)
+    
+    # Get all dependents
+    all_dependents = graph.get_all_dependents(feature_id, recursive=True)
+    direct_dependents = graph.get_dependents(feature_id)
+    
+    # Display results
+    feature = graph.features[feature_id]
+    console.print(f"\n[cyan]Feature:[/cyan] {feature.name} ({feature_id})")
+    console.print(f"[cyan]Status:[/cyan] {feature.status}")
+    
+    if format == 'tree':
+        console.print("\n[yellow]Dependencies:[/yellow]")
+        if direct_deps:
+            _print_dependency_tree(graph, feature_id, seen=set(), prefix="", is_last=True, 
+                                 direction="dependencies", max_depth=depth)
+        else:
+            console.print("  None")
+        
+        console.print("\n[yellow]Dependents:[/yellow]")
+        if direct_dependents:
+            _print_dependency_tree(graph, feature_id, seen=set(), prefix="", is_last=True,
+                                 direction="dependents", max_depth=depth)
+        else:
+            console.print("  None")
+    else:  # list format
+        console.print("\n[yellow]Direct Dependencies:[/yellow]")
+        for dep in direct_deps:
+            dep_feature = graph.features[dep]
+            console.print(f"  • {dep_feature.name} ({dep}) - {dep_feature.status}")
+        
+        console.print(f"\n[yellow]All Dependencies ({len(all_deps)}):[/yellow]")
+        for dep in all_deps:
+            dep_feature = graph.features[dep]
+            console.print(f"  • {dep_feature.name} ({dep}) - {dep_feature.status}")
+        
+        console.print("\n[yellow]Direct Dependents:[/yellow]")
+        for dep in direct_dependents:
+            dep_feature = graph.features[dep]
+            console.print(f"  • {dep_feature.name} ({dep}) - {dep_feature.status}")
+        
+        console.print(f"\n[yellow]All Dependents ({len(all_dependents)}):[/yellow]")
+        for dep in all_dependents:
+            dep_feature = graph.features[dep]
+            console.print(f"  • {dep_feature.name} ({dep}) - {dep_feature.status}")
+
+
+def _print_dependency_tree(graph, node_id, seen, prefix="", is_last=True, 
+                          direction="dependencies", max_depth=3, current_depth=0):
+    """Helper to print dependency tree."""
+    if current_depth > max_depth or node_id in seen:
+        return
+    
+    seen.add(node_id)
+    feature = graph.features[node_id]
+    
+    # Print current node
+    connector = "└── " if is_last else "├── "
+    status_color = {
+        "completed": "green",
+        "in_progress": "blue",
+        "blocked": "red",
+        "planned": "yellow"
+    }.get(feature.status, "white")
+    
+    console.print(f"{prefix}{connector}[{status_color}]{feature.name}[/{status_color}] ({node_id})")
+    
+    # Get children based on direction
+    if direction == "dependencies":
+        children = graph.get_dependencies(node_id)
+    else:
+        children = graph.get_dependents(node_id)
+    
+    if children and current_depth < max_depth:
+        # Add continuation line for all but last child
+        extension = "    " if is_last else "│   "
+        for i, child in enumerate(children):
+            if child not in seen:
+                _print_dependency_tree(
+                    graph, child, seen,
+                    prefix=prefix + extension,
+                    is_last=(i == len(children) - 1),
+                    direction=direction,
+                    max_depth=max_depth,
+                    current_depth=current_depth + 1
+                )
+
+
+@visualize.command('web')
+@click.option('--host', '-h', default='127.0.0.1', help='Host to bind to')
+@click.option('--port', '-p', type=int, default=5000, help='Port to listen on')
+@click.option('--project', help='Project directory to load automatically')
+@click.pass_context
+def visualize_web(ctx, host, port, project):
+    """Start interactive web server for feature graph visualization."""
+    server = FeatureGraphWebServer(host=host, port=port)
+    
+    if project:
+        # Load project automatically
+        from .core import VelocityTree
+        server.velocity_tree = VelocityTree(project)
+        server.feature_graph = server.velocity_tree.feature_graph
+        console.print(f"[green]✓[/green] Loaded project: {project}")
+    
+    console.print(f"[blue]Starting web server at http://{host}:{port}[/blue]")
+    console.print("[yellow]Press Ctrl+C to stop the server[/yellow]")
+    
+    try:
+        server.run()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
 
 
 # Register onboarding command

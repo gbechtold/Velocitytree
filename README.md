@@ -128,6 +128,35 @@ For detailed command options, use `vtree [command] --help`.
 
 ## 🌟 Key Features
 
+### 🔄 Natural Language Git Workflow
+Manage your git workflow using natural language:
+```bash
+# Create feature branches from descriptions
+vtree git feature "Add user authentication with OAuth"
+
+# Generate smart commit messages based on changes
+vtree git commit
+
+# Automatic semantic versioning
+vtree git tag --type minor
+
+# Analyze current changes
+vtree git analyze
+```
+
+### 💬 Conversational Project Planning (NEW!)
+Transform ideas into structured project plans through natural dialogue:
+```bash
+# Start an interactive planning session
+vtree plan start
+
+# Resume a planning session
+vtree plan resume <session-id>
+
+# Export your plan
+vtree plan export <session-id> --format markdown
+```
+
 ### Project Structure Flattening
 Transform complex directory trees into AI-digestible formats:
 ```bash

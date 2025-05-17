@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Conversational Project Planning**: Interactive dialogue-based planning (Milestone 2)
+  - Natural language project planning sessions
+  - Structured goal and feature extraction
+  - Multi-stage planning process (initialization → finalization)
+  - Session management (pause, resume, export)
+  - Export to Markdown and JSON formats
+  - Planning templates for common project types
+- **Git-Centric Feature Workflow**: Natural language git integration (Milestone 1)
+  - Create feature branches from natural language descriptions
+  - Generate smart commit messages based on code changes
+  - Automatic semantic versioning and tagging
+  - Comprehensive change analysis with impact assessment
+  - Integration with ticket systems (GitHub Issues, JIRA)
 - Complete plugin system with discovery, lifecycle, and hooks
 - Example plugins: JSON formatter, output validator, custom commands
 - Comprehensive plugin development guide

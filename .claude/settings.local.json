@@ -20,7 +20,12 @@
       "Bash(python -m pytest tests/test_workflow_context.py -v)",
       "Bash(python:*)",
       "Bash(chmod:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(velocitytree:*)",
+      "Bash(/Users/guntrambechtold/Documents/Projects/BusinessProjects/Velocitytree/venv/bin/pip install -e . --force-reinstall)",
+      "Bash(/Users/guntrambechtold/Documents/Projects/BusinessProjects/Velocitytree/venv/bin/arboretum --help)",
+      "Bash(mkdir:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

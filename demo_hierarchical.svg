@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+<defs>
+
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+        </marker>
+        
+
+        <filter id="dropshadow" height="130%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+            <feOffset dx="2" dy="2" result="offsetblur"/>
+            <feComponentTransfer>
+                <feFuncA type="linear" slope="0.3"/>
+            </feComponentTransfer>
+            <feMerge>
+                <feMergeNode/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+        
+</defs>
+<g class="graph-container">
+<g class="relationships">
+<line x1="50.0" y1="50.0" x2="50.0" y2="720.0" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m1" data-target="auth" data-type="includes"/>
+<line x1="50.0" y1="50.0" x2="1122.9255688664896" y2="562.0781124135518" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m1" data-target="git" data-type="includes"/>
+<line x1="50.0" y1="50.0" x2="50.0" y2="545.0" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m1" data-target="planning" data-type="includes"/>
+<line x1="600.0" y1="50.0" x2="78.58777340039785" y2="215.9038902816916" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m2" data-target="graph" data-type="includes"/>
+<line x1="600.0" y1="50.0" x2="75.30984463196322" y2="383.8937352342052" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m2" data-target="ai" data-type="includes"/>
+<line x1="600.0" y1="50.0" x2="600.0" y2="370.0" stroke="#9C27B0" stroke-width="2.5" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m2" data-target="plugins" data-type="includes"/>
+<line x1="1150.0" y1="50.0" x2="628.5877734003979" y2="215.9038902816916" stroke="#9C27B0" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m3" data-target="auto" data-type="includes"/>
+<line x1="1150.0" y1="50.0" x2="1150.0" y2="370.0" stroke="#9C27B0" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m3" data-target="cloud" data-type="includes"/>
+<line x1="1150.0" y1="50.0" x2="1150.0" y2="195.0" stroke="#9C27B0" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowhead)" data-source="m3" data-target="collab" data-type="includes"/>
+<line x1="1150.0" y1="575.0" x2="79.62740919005341" y2="745.286548537946" stroke="#333" stroke-width="2" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="git" data-target="auth" data-type="depends_on"/>
+<line x1="50.0" y1="575.0" x2="50.0" y2="720.0" stroke="#333" stroke-width="2" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="planning" data-target="auth" data-type="depends_on"/>
+<line x1="50.0" y1="225.0" x2="50.0" y2="545.0" stroke="#333" stroke-width="2.5" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="graph" data-target="planning" data-type="depends_on"/>
+<line x1="50.0" y1="400.0" x2="50.0" y2="545.0" stroke="#333" stroke-width="3" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="ai" data-target="planning" data-type="depends_on"/>
+<line x1="50.0" y1="400.0" x2="1120.3725908099466" y2="570.286548537946" stroke="#333" stroke-width="2.5" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="ai" data-target="git" data-type="depends_on"/>
+<line x1="600.0" y1="400.0" x2="75.30984463196322" y2="733.8937352342052" stroke="#333" stroke-width="2" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="plugins" data-target="auth" data-type="depends_on"/>
+<line x1="600.0" y1="225.0" x2="78.58777340039785" y2="390.9038902816916" stroke="#333" stroke-width="3" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="auto" data-target="ai" data-type="depends_on"/>
+<line x1="1150.0" y1="400.0" x2="78.58777340039785" y2="740.9038902816916" stroke="#333" stroke-width="2.5" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="cloud" data-target="auth" data-type="depends_on"/>
+<line x1="1150.0" y1="225.0" x2="1150.0" y2="370.0" stroke="#333" stroke-width="2.5" stroke-dasharray="" marker-end="url(#arrowhead)" data-source="collab" data-target="cloud" data-type="depends_on"/>
+<line x1="50.0" y1="225.0" x2="1121.412226599602" y2="565.9038902816916" stroke="#2196F3" stroke-width="2" stroke-dasharray="2,2" marker-end="url(#arrowhead)" data-source="graph" data-target="git" data-type="related_to"/>
+<line x1="600.0" y1="225.0" x2="600.0" y2="370.0" stroke="#2196F3" stroke-width="2" stroke-dasharray="2,2" marker-end="url(#arrowhead)" data-source="auto" data-target="plugins" data-type="related_to"/>
+</g>
+<g class="nodes">
+<g class="node" data-id="m1" data-status="completed" data-type="milestone">
+<rect x="10.0" y="30.0" width="80" height="40" rx="5" ry="5" fill="#4CAF50" stroke="#9C27B0" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="50.0" y="50.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Core Features</text>
+<text x="50.0" y="70.0" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="m2" data-status="in_progress" data-type="milestone">
+<rect x="560.0" y="30.0" width="80" height="40" rx="5" ry="5" fill="#2196F3" stroke="#9C27B0" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="600.0" y="50.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Advanced Featur...</text>
+<text x="600.0" y="70.0" text-anchor="middle" font-size="16">⚡</text>
+</g>
+<g class="node" data-id="m3" data-status="planned" data-type="milestone">
+<rect x="1110.0" y="30.0" width="80" height="40" rx="5" ry="5" fill="#9E9E9E" stroke="#9C27B0" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="1150.0" y="50.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Future Vision</text>
+<text x="1150.0" y="70.0" text-anchor="middle" font-size="16">○</text>
+</g>
+<g class="node" data-id="auth" data-status="completed" data-type="feature">
+<circle cx="50.0" cy="750.0" r="30" fill="#4CAF50" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="50.0" y="750.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Authentication</text>
+<text x="50.0" y="770.0" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="git" data-status="completed" data-type="feature">
+<circle cx="1150.0" cy="575.0" r="30" fill="#4CAF50" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="1150.0" y="575.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Git Integration</text>
+<text x="1150.0" y="595.0" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="planning" data-status="completed" data-type="feature">
+<circle cx="50.0" cy="575.0" r="30" fill="#4CAF50" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="50.0" y="575.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Planning Sessio...</text>
+<text x="50.0" y="595.0" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="graph" data-status="completed" data-type="feature">
+<circle cx="50.0" cy="225.0" r="30" fill="#4CAF50" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="50.0" y="225.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Feature Graphs</text>
+<text x="50.0" y="245.0" text-anchor="middle" font-size="16">✓</text>
+</g>
+<g class="node" data-id="ai" data-status="in_progress" data-type="feature">
+<circle cx="50.0" cy="400.0" r="30" fill="#2196F3" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="50.0" y="400.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">AI Assistant</text>
+<text x="50.0" y="420.0" text-anchor="middle" font-size="16">⚡</text>
+</g>
+<g class="node" data-id="plugins" data-status="in_progress" data-type="feature">
+<circle cx="600.0" cy="400.0" r="30" fill="#2196F3" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="600.0" y="400.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Plugin System</text>
+<text x="600.0" y="420.0" text-anchor="middle" font-size="16">⚡</text>
+</g>
+<g class="node" data-id="auto" data-status="planned" data-type="feature">
+<circle cx="600.0" cy="225.0" r="30" fill="#9E9E9E" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="600.0" y="225.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Autonomous Agen...</text>
+<text x="600.0" y="245.0" text-anchor="middle" font-size="16">○</text>
+</g>
+<g class="node" data-id="cloud" data-status="planned" data-type="feature">
+<circle cx="1150.0" cy="400.0" r="30" fill="#9E9E9E" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="1150.0" y="400.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Cloud Sync</text>
+<text x="1150.0" y="420.0" text-anchor="middle" font-size="16">○</text>
+</g>
+<g class="node" data-id="collab" data-status="blocked" data-type="feature">
+<circle cx="1150.0" cy="225.0" r="30" fill="#F44336" stroke="#2196F3" stroke-width="2" filter="url(#dropshadow)"/>
+<text x="1150.0" y="225.0" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="bold" fill="white">Collaboration</text>
+<text x="1150.0" y="245.0" text-anchor="middle" font-size="16">🚫</text>
+</g>
+</g>
+</g>
+</svg>
