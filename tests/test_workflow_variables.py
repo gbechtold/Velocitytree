@@ -61,7 +61,7 @@ class TestWorkflowVariableIntegration:
             'name': 'conditional_step',
             'type': 'command',
             'command': 'echo "Running"',
-            'condition': 'debug == true'
+            'condition': '{{debug}} == true'
         }
         
         step = WorkflowStep(step_config)

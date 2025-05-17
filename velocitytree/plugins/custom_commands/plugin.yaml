@@ -1,0 +1,15 @@
+name: custom_commands
+version: 1.0.0
+description: Adds custom commands for common development tasks
+author: Velocitytree Team
+entry_point: velocitytree.plugins.custom_commands:CustomCommandsPlugin
+main_class: CustomCommandsPlugin
+requirements: []
+config:
+  commands:
+    - name: stats
+      description: Show project statistics
+    - name: clean
+      description: Clean generated files
+    - name: backup
+      description: Create backup of project

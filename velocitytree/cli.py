@@ -36,6 +36,13 @@ def cli(ctx, config, verbose, quiet):
         logger.setLevel('DEBUG')
     elif quiet:
         logger.setLevel('ERROR')
+    
+    # Initialize plugin manager
+    from .plugin_system import PluginManager
+    ctx.obj['plugin_manager'] = PluginManager(ctx.obj['config'])
+    
+    # Register plugin commands
+    ctx.obj['plugin_manager'].register_cli_commands(cli)
 
 
 @cli.command()
@@ -661,7 +668,7 @@ def plugin():
 @click.pass_context
 def list_plugins(ctx):
     """List available plugins."""
-    from .plugins import PluginManager
+    from .plugin_system import PluginManager
     
     manager = PluginManager(config=ctx.obj['config'])
     plugins = manager.list_plugins()
@@ -692,7 +699,7 @@ def list_plugins(ctx):
 @click.pass_context
 def activate_plugin(ctx, name):
     """Activate a plugin."""
-    from .plugins import PluginManager
+    from .plugin_system import PluginManager
     
     manager = PluginManager(config=ctx.obj['config'])
     
@@ -707,7 +714,7 @@ def activate_plugin(ctx, name):
 @click.pass_context
 def deactivate_plugin(ctx, name):
     """Deactivate a plugin."""
-    from .plugins import PluginManager
+    from .plugin_system import PluginManager
     
     manager = PluginManager(config=ctx.obj['config'])
     

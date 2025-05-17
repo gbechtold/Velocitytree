@@ -20,16 +20,54 @@ Velocitytree is a powerful Python tool that streamlines developer workflows by i
 
 ## 📦 Installation
 
+### From PyPI
+
 ```bash
 pip install velocitytree
 ```
 
-Or install from source:
+### From Source (Recommended for Development)
+
+> ⚠️ **Important**: Always use a virtual environment to avoid Python system conflicts
 
 ```bash
+# Clone the repository
 git clone https://github.com/gbechtold/Velocitytree.git
 cd Velocitytree
+
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install in development mode
 pip install -e .
+
+# Optional: Install development dependencies
+pip install -r requirements-dev.txt
+```
+
+### Automated Setup Script
+
+For convenience, use our setup script:
+
+```bash
+# Unix/Mac
+git clone https://github.com/gbechtold/Velocitytree.git
+cd Velocitytree
+./scripts/setup.sh        # Basic installation
+./scripts/setup.sh --dev  # Include development dependencies
+
+# Windows
+git clone https://github.com/gbechtold/Velocitytree.git
+cd Velocitytree
+scripts\setup.bat        # Basic installation  
+scripts\setup.bat --dev  # Include development dependencies
+```
+
+### One-Line Installation (Unix/Mac)
+
+```bash
+git clone https://github.com/gbechtold/Velocitytree.git && cd Velocitytree && python3 -m venv venv && source venv/bin/activate && pip install -e .
 ```
 
 ## 🏃 Quick Start

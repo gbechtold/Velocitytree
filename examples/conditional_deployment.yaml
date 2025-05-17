@@ -1,0 +1,87 @@
+name: conditional_deployment
+description: Advanced conditional deployment workflow example
+
+env:
+  PROJECT_NAME: velocitytree
+  DEFAULT_BRANCH: main
+
+steps:
+  - name: check_branch
+    type: command
+    command: git rev-parse --abbrev-ref HEAD
+    # Store branch name in context
+
+  - name: run_tests
+    type: command
+    command: python -m pytest
+    condition: '{{env}} != "production" or {{force_test}} == true'
+
+  - name: production_deployment
+    if: '{{env}} == "production" and {{branch}} == "main"'
+    then:
+      - name: build_production
+        type: command
+        command: npm run build:prod
+        
+      - name: minify_assets
+        type: command
+        command: npm run minify
+        
+      - name: deploy_to_aws
+        type: command
+        command: aws s3 sync dist/ s3://{{bucket_name}}/
+        condition: '{{deploy_target}} == "aws"'
+        
+      - name: deploy_to_gcp
+        type: command
+        command: gcloud app deploy
+        condition: '{{deploy_target}} == "gcp"'
+        
+      - name: invalidate_cache
+        type: command
+        command: aws cloudfront create-invalidation --distribution-id {{cf_dist_id}}
+        condition: '{{deploy_target}} == "aws" and {{invalidate_cache}} == true'
+    else:
+      - name: build_development
+        type: command
+        command: npm run build:dev
+        
+      - name: deploy_to_staging
+        type: command
+        command: rsync -avz dist/ {{staging_server}}:/var/www/staging/
+        condition: '{{env}} == "staging"'
+
+  - name: run_e2e_tests
+    type: command
+    command: npm run test:e2e
+    # Skip E2E tests on feature branches unless explicitly requested
+    condition: '({{branch}} == "main" or {{branch}} contains "release/") or {{force_e2e}} == true'
+
+  - name: send_notification
+    if: '{{steps.production_deployment.status}} == "success"'
+    then:
+      - name: slack_success
+        type: command
+        command: |
+          curl -X POST {{slack_webhook}} \
+            -H 'Content-Type: application/json' \
+            -d '{"text": "✅ Deployment successful for {{PROJECT_NAME}} to {{env}}"}'
+    else:
+      - name: slack_failure
+        type: command
+        command: |
+          curl -X POST {{slack_webhook}} \
+            -H 'Content-Type: application/json' \
+            -d '{"text": "❌ Deployment failed for {{PROJECT_NAME}} to {{env}}"}'
+        condition: '{{steps.production_deployment.status}} == "error"'
+
+  - name: cleanup
+    type: command
+    command: rm -rf dist/temp
+    condition: '{{cleanup}} != false'  # Always cleanup unless explicitly disabled
+
+cleanup:
+  - name: restore_branch
+    type: command
+    command: git checkout {{original_branch}}
+    condition: '{{branch}} != {{original_branch}}'
