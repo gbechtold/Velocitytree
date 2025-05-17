@@ -72,5 +72,6 @@ Working on: **Step 4 - Workflow System**
    
 ### Active Tickets
 5. `FEAT-005`: Create plugin discovery mechanism
-   - Status: In Progress
+   - Status: PR Open (Ready for review)
    - Branch: feat-005-plugin-discovery
+   - PR: https://github.com/gbechtold/Velocitytree/pull/new/feat-005-plugin-discovery
