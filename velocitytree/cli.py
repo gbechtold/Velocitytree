@@ -1428,6 +1428,130 @@ def milestone_progress(ctx, project):
 
 
 @cli.group()
+def doc():
+    """Documentation generation commands."""
+    pass
+
+
+@doc.command('generate')
+@click.argument('source', type=click.Path(exists=True))
+@click.option('--type', '-t', type=click.Choice(['module', 'api', 'class', 'function', 'readme', 'changelog']), 
+              default='module', help='Type of documentation to generate')
+@click.option('--format', '-f', type=click.Choice(['markdown', 'html', 'rst', 'json', 'yaml']), 
+              default='markdown', help='Output format')
+@click.option('--output', '-o', type=click.Path(), help='Output file path')
+@click.option('--template', help='Custom template to use')
+@click.option('--style', type=click.Choice(['google', 'numpy', 'sphinx']), 
+              default='google', help='Documentation style')
+@click.pass_context
+def generate_docs(ctx, source, type, format, output, template, style):
+    """Generate documentation from source code."""
+    from pathlib import Path
+    from .documentation import DocGenerator, DocConfig, DocType, DocFormat, DocStyle
+    
+    # Create generator
+    config = DocConfig(
+        format=DocFormat[format.upper()],
+        style=DocStyle[style.upper()],
+    )
+    generator = DocGenerator(config)
+    
+    # Generate documentation
+    with console.status(f"Generating {type} documentation..."):
+        try:
+            result = generator.generate_documentation(
+                source=Path(source),
+                doc_type=DocType[type.upper()],
+            )
+            
+            # Write output
+            if output:
+                output_path = Path(output)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(result.content)
+                console.print(f"[green]✓[/green] Documentation written to {output}")
+            else:
+                console.print(result.content)
+                
+            # Show quality metrics
+            console.print(f"\n[blue]Quality Score: {result.quality_score:.1f}/100[/blue]")
+            console.print(f"[blue]Completeness: {result.completeness_score:.1f}%[/blue]")
+            
+            # Show issues if any
+            if result.issues:
+                console.print(f"\n[yellow]Issues found: {len(result.issues)}[/yellow]")
+                for issue in result.issues[:5]:  # Show first 5 issues
+                    console.print(f"  • {issue.severity.value}: {issue.message}")
+                if len(result.issues) > 5:
+                    console.print(f"  ... and {len(result.issues) - 5} more")
+                    
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {str(e)}")
+            logger.error(f"Documentation generation error: {e}", exc_info=True)
+
+
+@doc.command('check')
+@click.argument('source', type=click.Path(exists=True))
+@click.option('--recursive', '-r', is_flag=True, help='Check all files recursively')
+@click.pass_context
+def check_docs(ctx, source, recursive):
+    """Check documentation quality and completeness."""
+    from pathlib import Path
+    from .documentation import DocGenerator
+    
+    source_path = Path(source)
+    
+    if source_path.is_file():
+        files = [source_path]
+    else:
+        pattern = "**/*.py" if recursive else "*.py"
+        files = list(source_path.glob(pattern))
+    
+    total_quality = 0
+    total_completeness = 0
+    all_issues = []
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console
+    ) as progress:
+        task = progress.add_task(f"Checking {len(files)} files...", total=len(files))
+        
+        generator = DocGenerator()
+        
+        for file_path in files:
+            progress.update(task, advance=1, description=f"Checking {file_path.name}")
+            
+            try:
+                result = generator.generate_documentation(file_path)
+                total_quality += result.quality_score
+                total_completeness += result.completeness_score
+                all_issues.extend(result.issues)
+            except Exception as e:
+                console.print(f"[red]Error checking {file_path}: {e}[/red]")
+    
+    # Show summary
+    avg_quality = total_quality / len(files) if files else 0
+    avg_completeness = total_completeness / len(files) if files else 0
+    
+    console.print(f"\n[blue]Documentation Quality Report[/blue]")
+    console.print(f"Files checked: {len(files)}")
+    console.print(f"Average quality score: {avg_quality:.1f}/100")
+    console.print(f"Average completeness: {avg_completeness:.1f}%")
+    console.print(f"Total issues: {len(all_issues)}")
+    
+    # Show issue breakdown
+    if all_issues:
+        from collections import Counter
+        severity_counts = Counter(issue.severity.value for issue in all_issues)
+        
+        console.print("\n[yellow]Issues by severity:[/yellow]")
+        for severity, count in severity_counts.most_common():
+            console.print(f"  {severity}: {count}")
+
+
+@cli.group()
 def workflow():
     """Workflow management commands."""
     pass
