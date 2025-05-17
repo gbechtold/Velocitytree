@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from velocitytree.plugins import Plugin, PluginManager
+from velocitytree.plugin_system import Plugin, PluginManager
 from velocitytree.config import Config
 
 

@@ -1,0 +1,25 @@
+name: output_validator
+version: 1.0.0
+description: Validates generated code context against configurable rules
+author: Velocitytree Team
+entry_point: velocitytree.plugins.output_validator:OutputValidatorPlugin
+main_class: OutputValidatorPlugin
+requirements: []
+config:
+  max_file_size_mb: 10
+  allowed_extensions:
+    - .py
+    - .js
+    - .ts
+    - .java
+    - .cpp
+    - .c
+    - .h
+    - .md
+    - .txt
+    - .json
+    - .yaml
+    - .yml
+    - .toml
+  encoding_check: true
+  validate_syntax: false

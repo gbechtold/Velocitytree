@@ -21,7 +21,7 @@ Create a Python file in the plugins directory:
 ```python
 # ~/.velocitytree/plugins/my_plugin.py
 
-from velocitytree.plugins import Plugin
+from velocitytree.plugin_system import Plugin
 
 class MyPlugin(Plugin):
     @property
@@ -60,7 +60,7 @@ The `__init__.py` should contain your plugin class or have a `__plugin__` marker
 ```python
 # my_plugin/__init__.py
 
-from velocitytree.plugins import Plugin
+from velocitytree.plugin_system import Plugin
 
 class MyPlugin(Plugin):
     # ... plugin implementation
