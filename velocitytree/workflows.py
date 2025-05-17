@@ -16,6 +16,7 @@ from .config import Config
 from .utils import logger, run_command, ensure_directory
 from .core import TreeFlattener, ContextManager
 from .ai import AIAssistant
+from .templates import WORKFLOW_TEMPLATES
 
 console = Console()
 
@@ -290,20 +291,31 @@ class WorkflowManager:
             except Exception as e:
                 logger.error(f"Error loading workflow {workflow_file}: {e}")
     
-    def create_workflow(self, name: str, config: Optional[Dict[str, Any]] = None):
-        """Create a new workflow."""
+    def create_workflow(self, name: str, config: Optional[Dict[str, Any]] = None, template: Optional[str] = None):
+        """Create a new workflow, optionally from a template."""
         if config is None:
-            # Create a template workflow
-            config = {
-                'description': f'Workflow {name}',
-                'steps': [
-                    {
-                        'name': 'Step 1',
-                        'type': 'command',
-                        'command': 'echo "Hello from workflow!"'
-                    }
-                ]
-            }
+            if template and template in WORKFLOW_TEMPLATES:
+                # Use template
+                template_config = WORKFLOW_TEMPLATES[template]
+                config = {
+                    'description': template_config.get('description', f'Workflow {name}'),
+                    'steps': template_config.get('steps', []),
+                    'env': template_config.get('env', {}),
+                    'on_error': template_config.get('on_error', 'stop')
+                }
+                logger.info(f"Creating workflow '{name}' from template '{template}'")
+            else:
+                # Create a basic workflow
+                config = {
+                    'description': f'Workflow {name}',
+                    'steps': [
+                        {
+                            'name': 'Step 1',
+                            'type': 'command',
+                            'command': 'echo "Hello from workflow!"'
+                        }
+                    ]
+                }
         
         workflow = Workflow(name, config)
         self.workflows[name] = workflow
@@ -467,3 +479,15 @@ class WorkflowManager:
                 )
             
             console.print(cleanup_table)
+    
+    def list_templates(self) -> List[Dict[str, str]]:
+        """List available workflow templates."""
+        templates = []
+        for template_id, template_config in WORKFLOW_TEMPLATES.items():
+            templates.append({
+                'id': template_id,
+                'name': template_config.get('name', template_id),
+                'description': template_config.get('description', ''),
+                'steps': len(template_config.get('steps', []))
+            })
+        return templates
