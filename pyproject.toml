@@ -53,6 +53,9 @@ Documentation = "https://velocitytree.readthedocs.io"
 velocitytree = "velocitytree.cli:main"
 vtree = "velocitytree.cli:main"
 
+[project.entry-points."velocitytree.plugins"]
+example = "velocitytree.plugins:ExamplePlugin"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=6.0.0",

@@ -103,19 +103,55 @@ class PluginManager:
         self.config = config
         self.plugins: Dict[str, Plugin] = {}
         self.hook_manager = HookManager()
-        self.plugin_dirs = [
-            Path.home() / '.velocitytree' / 'plugins',
-            Path(__file__).parent / 'plugins'
-        ]
+        self.plugin_dirs = self._get_plugin_directories()
         
         # Ensure plugin directories exist
         for plugin_dir in self.plugin_dirs:
             plugin_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Auto-discover and load enabled plugins
+        if config.config.get('plugins', {}).get('auto_load', True):
+            self._auto_load_plugins()
+    
+    def _get_plugin_directories(self) -> List[Path]:
+        """Get all plugin directories."""
+        dirs = [
+            Path.home() / '.velocitytree' / 'plugins',  # User plugins
+            Path(__file__).parent / 'plugins',           # Built-in plugins
+        ]
+        
+        # Add custom plugin directories from config
+        custom_dirs = self.config.config.get('plugins', {}).get('directories', [])
+        for dir_path in custom_dirs:
+            path = Path(dir_path).expanduser().resolve()
+            if path not in dirs:
+                dirs.append(path)
+        
+        # Add environment variable paths
+        env_paths = os.environ.get('VELOCITYTREE_PLUGIN_PATH', '').split(':')
+        for env_path in env_paths:
+            if env_path:
+                path = Path(env_path).expanduser().resolve()
+                if path not in dirs:
+                    dirs.append(path)
+        
+        return dirs
+    
+    def _auto_load_plugins(self):
+        """Auto-load enabled plugins from config."""
+        enabled_plugins = self.config.config.get('plugins', {}).get('enabled', [])
+        
+        for plugin_name in enabled_plugins:
+            try:
+                self.activate_plugin(plugin_name)
+            except Exception as e:
+                logger.error(f"Failed to auto-load plugin {plugin_name}: {e}")
     
     def discover_plugins(self) -> List[str]:
         """Discover available plugins."""
         discovered = []
         
+        # 1. Discover plugins from directories
         for plugin_dir in self.plugin_dirs:
             if not plugin_dir.exists():
                 continue
@@ -131,9 +167,89 @@ class PluginManager:
             # Look for plugin packages
             for path in plugin_dir.iterdir():
                 if path.is_dir() and (path / '__init__.py').exists():
-                    discovered.append(path.name)
+                    if self._is_valid_plugin_package(path):
+                        discovered.append(path.name)
+        
+        # 2. Discover plugins from entry points
+        discovered.extend(self._discover_entry_point_plugins())
+        
+        # 3. Discover plugins from pip packages
+        discovered.extend(self._discover_pip_plugins())
         
         return list(set(discovered))
+    
+    def _is_valid_plugin_package(self, path: Path) -> bool:
+        """Check if a directory is a valid plugin package."""
+        # Check for plugin.yaml or plugin.toml metadata
+        metadata_files = ['plugin.yaml', 'plugin.yml', 'plugin.toml', 'plugin.json']
+        for metadata_file in metadata_files:
+            if (path / metadata_file).exists():
+                return True
+        
+        # Check for __plugin__ marker
+        init_file = path / '__init__.py'
+        if init_file.exists():
+            try:
+                with open(init_file, 'r') as f:
+                    content = f.read()
+                    if '__plugin__' in content or 'Plugin' in content:
+                        return True
+            except Exception:
+                pass
+        
+        return False
+    
+    def _discover_entry_point_plugins(self) -> List[str]:
+        """Discover plugins registered as entry points."""
+        discovered = []
+        
+        try:
+            from importlib.metadata import entry_points
+            
+            # Look for velocitytree.plugins entry points
+            if hasattr(entry_points(), 'select'):
+                # Python 3.10+
+                eps = entry_points().select(group='velocitytree.plugins')
+            else:
+                # Python 3.9 and earlier
+                eps = entry_points().get('velocitytree.plugins', [])
+            
+            for ep in eps:
+                discovered.append(ep.name)
+        except ImportError:
+            # Fall back for older Python versions
+            try:
+                import pkg_resources
+                for ep in pkg_resources.iter_entry_points('velocitytree.plugins'):
+                    discovered.append(ep.name)
+            except ImportError:
+                pass
+        
+        return discovered
+    
+    def _discover_pip_plugins(self) -> List[str]:
+        """Discover plugins installed via pip (velocitytree-plugin-*)."""
+        discovered = []
+        
+        try:
+            from importlib.metadata import distributions
+            
+            for dist in distributions():
+                if dist.name.startswith('velocitytree-plugin-'):
+                    plugin_name = dist.name.replace('velocitytree-plugin-', '')
+                    discovered.append(plugin_name)
+        except ImportError:
+            # Fall back for older Python versions
+            try:
+                import pkg_resources
+                for dist in pkg_resources.working_set:
+                    if dist.project_name.startswith('velocitytree-plugin-'):
+                        plugin_name = dist.project_name.replace('velocitytree-plugin-', '')
+                        discovered.append(plugin_name)
+            except ImportError:
+                pass
+        
+        return discovered
     
     def load_plugin(self, plugin_name: str) -> Optional[Plugin]:
         """Load a plugin by name."""
@@ -141,7 +257,7 @@ class PluginManager:
         if plugin_name in self.plugins:
             return self.plugins[plugin_name]
         
-        # Try to find and load the plugin
+        # 1. Try to find and load from directories
         for plugin_dir in self.plugin_dirs:
             # Try as a module
             module_path = plugin_dir / f'{plugin_name}.py'
@@ -153,7 +269,88 @@ class PluginManager:
             if package_path.exists():
                 return self._load_plugin_from_package(plugin_name, plugin_dir / plugin_name)
         
+        # 2. Try to load from entry points
+        plugin = self._load_from_entry_point(plugin_name)
+        if plugin:
+            return plugin
+        
+        # 3. Try to load from pip packages
+        plugin = self._load_from_pip_package(plugin_name)
+        if plugin:
+            return plugin
+        
         logger.error(f"Plugin not found: {plugin_name}")
+        return None
+    
+    def _load_from_entry_point(self, plugin_name: str) -> Optional[Plugin]:
+        """Load a plugin from an entry point."""
+        try:
+            from importlib.metadata import entry_points
+            
+            # Look for the specific entry point
+            if hasattr(entry_points(), 'select'):
+                # Python 3.10+
+                eps = entry_points().select(group='velocitytree.plugins', name=plugin_name)
+            else:
+                # Python 3.9 and earlier
+                eps = [ep for ep in entry_points().get('velocitytree.plugins', []) 
+                       if ep.name == plugin_name]
+            
+            for ep in eps:
+                try:
+                    plugin_class = ep.load()
+                    plugin = plugin_class(self.config)
+                    self.plugins[plugin_name] = plugin
+                    logger.info(f"Loaded plugin from entry point: {plugin_name} v{plugin.version}")
+                    return plugin
+                except Exception as e:
+                    logger.error(f"Error loading entry point plugin {plugin_name}: {e}")
+        except ImportError:
+            # Fall back for older Python versions
+            try:
+                import pkg_resources
+                for ep in pkg_resources.iter_entry_points('velocitytree.plugins'):
+                    if ep.name == plugin_name:
+                        try:
+                            plugin_class = ep.load()
+                            plugin = plugin_class(self.config)
+                            self.plugins[plugin_name] = plugin
+                            logger.info(f"Loaded plugin from entry point: {plugin_name} v{plugin.version}")
+                            return plugin
+                        except Exception as e:
+                            logger.error(f"Error loading entry point plugin {plugin_name}: {e}")
+            except ImportError:
+                pass
+        
+        return None
+    
+    def _load_from_pip_package(self, plugin_name: str) -> Optional[Plugin]:
+        """Load a plugin from a pip package."""
+        package_name = f'velocitytree-plugin-{plugin_name}'
+        
+        try:
+            # Try to import the package
+            module = importlib.import_module(package_name)
+            
+            # Find the plugin class
+            plugin_class = None
+            for name, obj in inspect.getmembers(module):
+                if inspect.isclass(obj) and issubclass(obj, Plugin) and obj is not Plugin:
+                    plugin_class = obj
+                    break
+            
+            if plugin_class:
+                plugin = plugin_class(self.config)
+                self.plugins[plugin_name] = plugin
+                logger.info(f"Loaded plugin from pip package: {plugin_name} v{plugin.version}")
+                return plugin
+            else:
+                logger.error(f"No Plugin class found in package {package_name}")
+        except ImportError:
+            logger.debug(f"Package {package_name} not found")
+        except Exception as e:
+            logger.error(f"Error loading pip package plugin {plugin_name}: {e}")
+        
         return None
     
     def _load_plugin_from_file(self, plugin_name: str, file_path: Path) -> Optional[Plugin]:
@@ -189,6 +386,9 @@ class PluginManager:
     def _load_plugin_from_package(self, plugin_name: str, package_path: Path) -> Optional[Plugin]:
         """Load a plugin from a package."""
         try:
+            # Load plugin metadata if available
+            metadata = self._load_plugin_metadata(package_path)
+            
             # Add package directory to Python path
             import sys
             sys.path.insert(0, str(package_path.parent))
@@ -197,7 +397,14 @@ class PluginManager:
             module = importlib.import_module(plugin_name)
             
             # Find the plugin class
-            plugin_class = getattr(module, 'Plugin', None)
+            plugin_class = None
+            
+            # Check metadata for class name
+            if metadata and 'class' in metadata:
+                plugin_class = getattr(module, metadata['class'], None)
+            
+            if not plugin_class:
+                plugin_class = getattr(module, 'Plugin', None)
             
             if not plugin_class or not issubclass(plugin_class, Plugin):
                 # Look for a Plugin subclass
@@ -214,6 +421,12 @@ class PluginManager:
             plugin = plugin_class(self.config)
             self.plugins[plugin_name] = plugin
             
+            # Apply metadata overrides if available
+            if metadata:
+                for attr in ['name', 'version', 'description', 'author']:
+                    if attr in metadata and hasattr(plugin, f'_{attr}'):
+                        setattr(plugin, f'_{attr}', metadata[attr])
+            
             logger.info(f"Loaded plugin: {plugin_name} v{plugin.version}")
             return plugin
             
@@ -224,6 +437,26 @@ class PluginManager:
             # Remove from path
             if str(package_path.parent) in sys.path:
                 sys.path.remove(str(package_path.parent))
+    
+    def _load_plugin_metadata(self, package_path: Path) -> Optional[Dict[str, Any]]:
+        """Load plugin metadata from plugin.yaml/json/toml files."""
+        metadata_files = {
+            'plugin.yaml': lambda f: __import__('yaml').safe_load(f),
+            'plugin.yml': lambda f: __import__('yaml').safe_load(f),
+            'plugin.json': lambda f: __import__('json').load(f),
+            'plugin.toml': lambda f: __import__('toml').load(f),
+        }
+        
+        for filename, loader in metadata_files.items():
+            metadata_path = package_path / filename
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, 'r') as f:
+                        return loader(f)
+                except Exception as e:
+                    logger.warning(f"Error loading plugin metadata from {metadata_path}: {e}")
+        
+        return None
     
     def activate_plugin(self, plugin_name: str) -> bool:
         """Activate a plugin."""
@@ -332,6 +565,8 @@ class ExamplePlugin(Plugin):
     
     def register_commands(self, cli):
         """Register CLI commands."""
+        import click
+        
         @cli.command()
         def example_command():
             """Example command from plugin."""
