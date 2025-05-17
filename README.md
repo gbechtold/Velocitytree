@@ -27,15 +27,26 @@ Ever struggled with:
 ## 🚀 Quick Start (One-Line Install)
 
 ```bash
-# Clone, setup environment, and install in one command:
-git clone https://github.com/gbechtold/Velocitytree.git && cd Velocitytree && python3 -m venv venv && source venv/bin/activate && pip install -e .
+# Clone, setup environment, install, and run setup wizard in one command:
+git clone https://github.com/gbechtold/Velocitytree.git && cd Velocitytree && python3 -m venv venv && source venv/bin/activate && pip install -e . && velocitytree onboard
 ```
 
 ## 💡 Basic Usage
 
-Initialize a new project:
+### First Time Setup
+When you run VelocityTree for the first time, the onboarding wizard will guide you through:
+- 🔑 API key configuration (OpenAI, Anthropic)
+- 📋 Workflow template selection
+- 🏗️ Project structure creation
+- 📖 Essential commands overview
+
 ```bash
-vtree init
+vtree onboard  # Run the interactive setup wizard
+```
+
+### Initialize a new project
+```bash
+vtree init  # This will also prompt to run the onboarding wizard
 ```
 
 Flatten your project structure for AI analysis:

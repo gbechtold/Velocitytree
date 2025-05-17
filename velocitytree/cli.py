@@ -16,6 +16,7 @@ from .utils import logger
 from .ai import AIAssistant
 from .workflows import WorkflowManager
 from .version import version_info
+from .onboarding import create_onboarding_command
 
 console = Console()
 
@@ -119,6 +120,13 @@ def init(ctx, template, name, force):
         progress.update(task, description="Project initialized successfully!")
         console.print("[green]✓[/green] Project initialized!")
         console.print(f"Configuration saved to: [blue]{config_path}[/blue]")
+        
+        # Prompt for onboarding
+        console.print("\n[yellow]Would you like to run the setup wizard to configure AI providers and workflows?[/yellow]")
+        if click.confirm("Run onboarding wizard?"):
+            from .onboarding import OnboardingWizard
+            wizard = OnboardingWizard(ctx.obj['config'])
+            wizard.run()
 
 
 @cli.command()
@@ -760,8 +768,17 @@ def config(ctx, output, format):
         console.print(output_text)
 
 
+# Register onboarding command
+create_onboarding_command(cli)
+
+
 def main():
     """Main entry point."""
+    # Check for first run
+    from .onboarding import check_first_run
+    if check_first_run():
+        return  # Exit after onboarding
+        
     try:
         cli(obj={})
     except Exception as e:
