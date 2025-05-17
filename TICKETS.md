@@ -66,5 +66,5 @@ Working on: **Step 4 - Workflow System**
    
 ### Active Tickets
 3. `FEAT-003`: Add conditional workflow steps
-   - Status: Not started
-   - Branch: TBD
+   - Status: In Progress
+   - Branch: feature/FEAT-003-conditional-workflow-steps
