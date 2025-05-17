@@ -121,12 +121,11 @@ def init(ctx, template, name, force):
         console.print("[green]✓[/green] Project initialized!")
         console.print(f"Configuration saved to: [blue]{config_path}[/blue]")
         
-        # Prompt for onboarding
-        console.print("\n[yellow]Would you like to run the setup wizard to configure AI providers and workflows?[/yellow]")
-        if click.confirm("Run onboarding wizard?"):
-            from .onboarding import OnboardingWizard
-            wizard = OnboardingWizard(ctx.obj['config'])
-            wizard.run()
+        # Automatically run onboarding wizard
+        console.print("\n[yellow]Starting setup wizard to configure AI providers and workflows...[/yellow]")
+        from .onboarding import OnboardingWizard
+        wizard = OnboardingWizard(ctx.obj['config'])
+        wizard.run()
 
 
 @cli.command()
