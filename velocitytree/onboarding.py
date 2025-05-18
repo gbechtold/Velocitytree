@@ -51,10 +51,12 @@ class OnboardingWizard:
         # Check if already configured
         if self._is_configured() and not reset:
             console.print("[yellow]Velocitytree is already configured![/yellow]")
-            if click.confirm("Would you like to reconfigure?"):
-                self._reset_configuration()
-            else:
+            # Clear any spinners
+            console.print()
+            if not click.confirm("Would you like to reconfigure?", default=False):
                 return
+            else:
+                self._reset_configuration()
         
         # Start onboarding flow
         self._show_welcome()

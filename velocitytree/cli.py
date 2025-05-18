@@ -91,6 +91,7 @@ def init(ctx, template, name, force):
         # Check if config already exists
         config_path = Path('.velocitytree.yaml')
         if config_path.exists() and not force:
+            progress.stop()
             console.print("[yellow]⚠[/yellow] Configuration file already exists. Use --force to overwrite.")
             return
         
@@ -143,14 +144,17 @@ def init(ctx, template, name, force):
             progress.update(task, description=f"Created {template} workflow")
         
         progress.update(task, description="Project initialized successfully!")
-        console.print("[green]✓[/green] Project initialized!")
-        console.print(f"Configuration saved to: [blue]{config_path}[/blue]")
-        
-        # Automatically run onboarding wizard
-        console.print("\n[yellow]Starting setup wizard to configure AI providers and workflows...[/yellow]")
-        from .onboarding import OnboardingWizard
-        wizard = OnboardingWizard(ctx.obj['config'])
-        wizard.run()
+    
+    console.print("[green]✓[/green] Project initialized!")
+    console.print(f"Configuration saved to: [blue]{config_path}[/blue]")
+    
+    # Automatically run onboarding wizard without extra spinner
+    console.print("\n[yellow]Starting setup wizard to configure AI providers and workflows...[/yellow]")
+    import time
+    time.sleep(0.5)  # Brief pause before wizard
+    from .onboarding import OnboardingWizard
+    wizard = OnboardingWizard(ctx.obj['config'])
+    wizard.run()
 
 
 @cli.command()
