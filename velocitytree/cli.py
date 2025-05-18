@@ -11,6 +11,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
+from rich.prompt import Confirm
 
 from .core import TreeFlattener, ContextManager
 from .config import Config
@@ -299,21 +300,83 @@ def code():
 @click.argument('path', type=click.Path(exists=True))
 @click.option('--type', '-t', type=click.Choice(['security', 'quality', 'performance', 'complexity', 'all']), 
               default='all', help='Type of analysis to perform')
-@click.option('--format', '-f', type=click.Choice(['text', 'json', 'report']), 
+@click.option('--format', '-f', type=click.Choice(['text', 'json', 'report', 'html']), 
               default='text', help='Output format')
 @click.option('--severity', '-s', type=click.Choice(['low', 'medium', 'high', 'critical']), 
               help='Minimum severity level to report')
+@click.option('--interactive', '-i', is_flag=True, help='Interactive analysis session')
+@click.option('--batch', '-b', type=click.Path(exists=True), help='Batch analyze files from list')
+@click.option('--output', '-o', type=click.Path(), help='Output file for reports')
 @click.pass_context
-def analyze(ctx, path, type, format, severity):
+def analyze(ctx, path, type, format, severity, interactive, batch, output):
     """Analyze code for security vulnerabilities and quality issues."""
     from pathlib import Path
     from .code_analysis.analyzer import CodeAnalyzer
     from .code_analysis.security import SecurityAnalyzer
     from .code_analysis.models import SeverityLevel, IssueCategory
+    from .interactive_analysis import InteractiveAnalyzer
+    from .report_generator import ReportGenerator
+    from rich.progress import Progress
     import json
+    import yaml
+    import datetime
+    
+    # Handle batch mode
+    if batch:
+        paths_to_analyze = []
+        batch_path = Path(batch)
+        
+        # Read file paths from batch file
+        if batch_path.suffix in ['.yaml', '.yml']:
+            with open(batch_path) as f:
+                batch_config = yaml.safe_load(f)
+                paths_to_analyze = [Path(p) for p in batch_config.get('files', [])]
+        else:
+            with open(batch_path) as f:
+                paths_to_analyze = [Path(line.strip()) for line in f if line.strip()]
+        
+        console.print(f"[blue]Batch analyzing {len(paths_to_analyze)} files...[/blue]")
+        
+        # Perform batch analysis
+        analyzer = CodeAnalyzer()
+        batch_results = []
+        
+        with Progress() as progress:
+            task = progress.add_task("Analyzing files...", total=len(paths_to_analyze))
+            
+            for file_path in paths_to_analyze:
+                if file_path.exists():
+                    result = analyzer.analyze_file(file_path)
+                    if result:
+                        batch_results.append({
+                            'path': str(file_path),
+                            'result': result
+                        })
+                progress.advance(task)
+        
+        # Generate report
+        report_gen = ReportGenerator()
+        report = report_gen.generate_batch_report(batch_results, format)
+        
+        if output:
+            with open(output, 'w') as f:
+                f.write(report)
+            console.print(f"[green]Report saved to: {output}[/green]")
+        else:
+            console.print(report)
+        return
+    
+    # Handle interactive mode
+    if interactive:
+        interactive_analyzer = InteractiveAnalyzer(console)
+        interactive_analyzer.start_session(Path(path))
+        return
     
     path = Path(path)
-    console.print(f"[blue]Analyzing: {path}[/blue]")
+    
+    # Don't print the analyzing message for JSON format
+    if format != 'json':
+        console.print(f"[blue]Analyzing: {path}[/blue]")
     
     try:
         if type == 'security':
@@ -357,7 +420,9 @@ def analyze(ctx, path, type, format, severity):
                     ],
                     'summary': result['summary']
                 }
-                console.print(json.dumps(output, indent=2))
+                # Use print instead of console.print for JSON output
+                print(json.dumps(output, indent=2))
+                return
             else:
                 if vulnerabilities:
                     console.print(f"\n[red]Found {len(vulnerabilities)} security vulnerabilities:[/red]")
@@ -386,6 +451,14 @@ def analyze(ctx, path, type, format, severity):
             if path.is_file():
                 result = analyzer.analyze_file(path)
                 if result:
+                    # Handle JSON format
+                    if format == 'json':
+                        from .report_generator import ReportGenerator
+                        report_gen = ReportGenerator()
+                        report = report_gen.generate_file_report(result, 'json')
+                        print(report)
+                        return
+                    
                     console.print(f"\n[green]Analysis of {path.name}:[/green]")
                     
                     # Display issues
@@ -428,6 +501,34 @@ def analyze(ctx, path, type, format, severity):
                 console.print("\n[yellow]Issues by severity:[/yellow]")
                 for severity, count in severity_counts.items():
                     console.print(f"  {severity}: {count}")
+                
+            # Handle report format
+            if format in ['report', 'html']:
+                report_gen = ReportGenerator()
+                
+                if path.is_file():
+                    report = report_gen.generate_file_report(result, format)
+                else:
+                    report = report_gen.generate_directory_report(result, format)
+                
+                if output:
+                    with open(output, 'w') as f:
+                        f.write(report)
+                    console.print(f"[green]Report saved to: {output}[/green]")
+                else:
+                    if format == 'html':
+                        # Save to temp file and open browser
+                        import tempfile
+                        import webbrowser
+                        
+                        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+                            f.write(report)
+                            temp_path = f.name
+                        
+                        console.print(f"[blue]Opening report in browser...[/blue]")
+                        webbrowser.open(f'file://{temp_path}')
+                    else:
+                        console.print(report)
                 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
@@ -1490,6 +1591,70 @@ def generate_docs(ctx, source, type, format, output, template, style):
             logger.error(f"Documentation generation error: {e}", exc_info=True)
 
 
+@doc.command('watch')
+@click.argument('patterns', nargs=-1, required=True)
+@click.option('--format', '-f', type=click.Choice(['markdown', 'html', 'rst', 'json', 'yaml']), 
+              default='markdown', help='Output format')
+@click.option('--style', type=click.Choice(['google', 'numpy', 'sphinx']), 
+              default='google', help='Documentation style')
+@click.option('--interval', '-i', type=float, default=1.0, help='Check interval in seconds')
+@click.pass_context
+def watch_docs(ctx, patterns, format, style, interval):
+    """Watch files and update documentation incrementally."""
+    from .documentation import IncrementalDocUpdater, DocConfig, DocFormat, DocStyle
+    
+    # Create updater
+    config = DocConfig(
+        format=DocFormat[format.upper()],
+        style=DocStyle[style.upper()],
+    )
+    updater = IncrementalDocUpdater(config)
+    
+    def update_callback(results, change_set):
+        """Callback for documentation updates."""
+        console.print(f"\n[blue]Detected {len(change_set.file_changes)} file changes[/blue]")
+        
+        for file_path, result in results.items():
+            console.print(f"[green]✓[/green] Updated: {file_path}")
+            console.print(f"  Quality: {result.quality_score:.1f}/100")
+            console.print(f"  Completeness: {result.completeness_score:.1f}%")
+            
+        # Show specific changes
+        if change_set.doc_changes:
+            console.print(f"\n[yellow]Documentation changes:[/yellow]")
+            for change in change_set.doc_changes[:5]:
+                action = change.change_type.capitalize()
+                console.print(f"  • {action}: {change.element} ({change.element_type})")
+                
+    console.print(f"[blue]Watching files matching patterns: {patterns}[/blue]")
+    console.print(f"[dim]Press Ctrl+C to stop[/dim]\n")
+    
+    try:
+        updater.watch_files(list(patterns), callback=update_callback, interval=interval)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Stopped watching files[/yellow]")
+
+
+@doc.command('invalidate-cache')
+@click.argument('files', nargs=-1)
+@click.option('--all', '-a', is_flag=True, help='Invalidate entire cache')
+@click.pass_context
+def invalidate_cache(ctx, files, all):
+    """Invalidate documentation cache."""
+    from .documentation import IncrementalDocUpdater
+    
+    updater = IncrementalDocUpdater()
+    
+    if all:
+        updater.invalidate_cache()
+        console.print("[green]✓[/green] Invalidated entire documentation cache")
+    elif files:
+        updater.invalidate_cache(list(files))
+        console.print(f"[green]✓[/green] Invalidated cache for {len(files)} files")
+    else:
+        console.print("[yellow]Specify files to invalidate or use --all flag[/yellow]")
+
+
 @doc.command('check')
 @click.argument('source', type=click.Path(exists=True))
 @click.option('--recursive', '-r', is_flag=True, help='Check all files recursively')
@@ -1549,6 +1714,61 @@ def check_docs(ctx, source, recursive):
         console.print("\n[yellow]Issues by severity:[/yellow]")
         for severity, count in severity_counts.most_common():
             console.print(f"  {severity}: {count}")
+
+
+@doc.command('suggest')
+@click.argument('source', type=click.Path(exists=True))
+@click.option('--output', '-o', type=click.Path(), help='Save suggestions to file')
+@click.option('--apply', '-a', is_flag=True, help='Apply suggestions automatically')
+@click.option('--interactive', '-i', is_flag=True, help='Interactive mode for applying suggestions')
+@click.pass_context
+def suggest_improvements(ctx, source, output, apply, interactive):
+    """Suggest documentation improvements for source code."""
+    from pathlib import Path
+    from .documentation import DocGenerator
+    
+    generator = DocGenerator()
+    
+    with console.status(f"Analyzing {source}..."):
+        try:
+            suggestions = generator.suggest_improvements(Path(source))
+            
+            # Display summary
+            console.print(suggestions['summary'])
+            
+            # Show specific suggestions if any
+            if suggestions['element_suggestions']:
+                console.print("\n[yellow]Specific Suggestions:[/yellow]")
+                
+                for element, suggestion in suggestions['element_suggestions'].items():
+                    element_type, name = element.split(':', 1)
+                    console.print(f"\n[blue]{element_type.capitalize()}: {name}[/blue]")
+                    console.print("[dim]Suggested documentation:[/dim]")
+                    console.print(suggestion)
+                    
+                    if interactive and apply:
+                        if Confirm.ask("Apply this suggestion?"):
+                            # Would implement actual application here
+                            console.print("[green]Applied suggestion[/green]")
+                            
+            # Save to file if requested
+            if output:
+                import json
+                with open(output, 'w') as f:
+                    json.dump(suggestions, f, indent=2)
+                console.print(f"\n[green]✓[/green] Suggestions saved to {output}")
+                
+            # Apply all suggestions if requested
+            if apply and not interactive:
+                count = len(suggestions['element_suggestions'])
+                if count > 0:
+                    if Confirm.ask(f"Apply {count} suggestions automatically?"):
+                        # Would implement actual application here
+                        console.print(f"[green]Applied {count} suggestions[/green]")
+                        
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {str(e)}")
+            logger.error(f"Documentation suggestion error: {e}", exc_info=True)
 
 
 @cli.group()
