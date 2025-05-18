@@ -9,9 +9,9 @@
 - [x] `FEAT-004`: Implement parallel workflow execution
 - [ ] `TEST-001`: Add comprehensive workflow tests
 
-### Step 5: Plugin System
+### Step 5: Plugin System ✅
 - [x] `FEAT-005`: Create plugin discovery mechanism
-- [x] `FEAT-006`: Add plugin lifecycle hooks
+- [x] `FEAT-006`: Add plugin lifecycle hooks ✅ (Re-implemented for v2.0.0)
 - [x] `FEAT-007`: Create example plugins
 - [x] `DOC-001`: Write plugin development guide
 - [x] `TEST-002`: Add plugin system tests
