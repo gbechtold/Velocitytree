@@ -4,28 +4,29 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "velocitytree"
-version = "0.1.0"
-description = "A Python tool to streamline developer workflows by managing project structure, context, and integrating AI assistance"
+version = "2.0.0"
+description = "AI-powered development assistant with continuous monitoring, drift detection, and intelligent suggestions"
 readme = "README.md"
 authors = [
     {name = "Guntram Bechtold", email = "your.email@example.com"},
 ]
 license = {text = "MIT"}
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Build Tools",
     "Topic :: Software Development :: Version Control",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 dependencies = [
     "click>=8.0.0",
     "rich>=10.0.0",
@@ -44,6 +45,15 @@ dependencies = [
     "prompt-toolkit>=3.0.0",
     "colorama>=0.4.0",
     "pyfiglet>=0.8.0",
+    "Flask>=2.0.0",
+    "flask-cors>=3.0.0",
+    "networkx>=3.0",
+    "numpy>=1.20.0",
+    "matplotlib>=3.5.0",
+    "watchdog>=2.0.0",
+    "scikit-learn>=1.0.0",
+    "psutil>=5.9.0",
+    "sqlalchemy>=2.0.0",
 ]
 
 [project.urls]
@@ -83,7 +93,7 @@ write_to = "velocitytree/_version.py"
 
 [tool.black]
 line-length = 100
-target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
+target-version = ['py38', 'py39', 'py310', 'py311']
 include = '\.pyi?$'
 
 [tool.isort]
@@ -91,7 +101,7 @@ profile = "black"
 line_length = 100
 
 [tool.mypy]
-python_version = "3.7"
+python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
