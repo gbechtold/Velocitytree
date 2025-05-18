@@ -21,6 +21,7 @@ from .models import (
     Suggestion,
     CodeLocation,
     Severity,
+    SeverityLevel,
     IssueCategory,
     PatternType,
     LanguageSupport
@@ -117,8 +118,15 @@ class CodeAnalyzer:
                 else:
                     # Add vulnerabilities as issues for now
                     for vuln in security_result['vulnerabilities']:
+                        # Map SeverityLevel to Severity
+                        severity_map = {
+                            SeverityLevel.CRITICAL: Severity.CRITICAL,
+                            SeverityLevel.HIGH: Severity.ERROR,
+                            SeverityLevel.MEDIUM: Severity.WARNING,
+                            SeverityLevel.LOW: Severity.INFO,
+                        }
                         issue = CodeIssue(
-                            severity=Severity[vuln.severity.value.upper()],
+                            severity=severity_map.get(vuln.severity, Severity.WARNING),
                             category=IssueCategory.SECURITY,
                             message=vuln.description,
                             rule_id=f"security-{vuln.type}",
