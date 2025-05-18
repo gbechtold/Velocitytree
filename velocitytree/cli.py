@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.prompt import Confirm
+from rich.progress import track
 
 from .core import TreeFlattener, ContextManager
 from .config import Config
@@ -533,6 +534,182 @@ def analyze(ctx, path, type, format, severity, interactive, batch, output):
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
         logger.error(f"Code analysis error: {e}", exc_info=True)
+
+
+@code.command()
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--watch', '-w', is_flag=True, help='Watch for file changes')
+@click.option('--priority', '-p', type=click.Choice(['all', 'high', 'medium', 'low']), 
+              default='all', help='Filter by priority level')
+@click.option('--type', '-t', type=click.Choice(['all', 'style', 'performance', 'security', 
+                                                  'documentation', 'refactoring']), 
+              default='all', help='Filter by suggestion type')
+@click.option('--output', '-o', type=click.Choice(['text', 'json']), 
+              default='text', help='Output format')
+@click.option('--fix', '-f', is_flag=True, help='Apply quick fixes automatically')
+@click.pass_context
+def suggest(ctx, path, watch, priority, type, output, fix):
+    """Get real-time code suggestions and improvements."""
+    from pathlib import Path
+    import asyncio
+    import json
+    from .realtime_suggestions import (
+        RealTimeSuggestionEngine, 
+        SuggestionType,
+        Severity
+    )
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    
+    path = Path(path)
+    engine = RealTimeSuggestionEngine()
+    
+    # Priority filtering mapping
+    priority_map = {
+        'high': 80,
+        'medium': 50,
+        'low': 30
+    }
+    
+    def filter_suggestions(suggestions):
+        """Filter suggestions based on options."""
+        filtered = suggestions
+        
+        # Filter by priority
+        if priority != 'all':
+            min_priority = priority_map.get(priority, 0)
+            filtered = [s for s in filtered if s.priority >= min_priority]
+        
+        # Filter by type
+        if type != 'all':
+            filtered = [s for s in filtered if s.type.value == type]
+        
+        return filtered
+    
+    def display_suggestions(suggestions, file_path):
+        """Display suggestions based on output format."""
+        if output == 'json':
+            json_output = []
+            for suggestion in suggestions:
+                json_output.append({
+                    'type': suggestion.type.value,
+                    'severity': suggestion.severity.value,
+                    'message': suggestion.message,
+                    'line': suggestion.range.start.line,
+                    'column': suggestion.range.start.column,
+                    'priority': suggestion.priority,
+                    'quick_fixes': [
+                        {
+                            'type': fix.type.value,
+                            'title': fix.title,
+                            'description': fix.description
+                        }
+                        for fix in suggestion.quick_fixes
+                    ]
+                })
+            print(json.dumps(json_output, indent=2))
+        else:
+            if not suggestions:
+                console.print(f"[green]No suggestions for {file_path}[/green]")
+                return
+            
+            console.print(f"\n[blue]Suggestions for {file_path}:[/blue]")
+            
+            for suggestion in suggestions:
+                # Color based on severity
+                color_map = {
+                    Severity.CRITICAL: "red",
+                    Severity.ERROR: "red",
+                    Severity.WARNING: "yellow",
+                    Severity.INFO: "blue"
+                }
+                color = color_map.get(suggestion.severity, "white")
+                
+                console.print(f"\n[{color}]{suggestion.severity.value.upper()}[/{color}] "
+                             f"[white]{suggestion.type.value}[/white] "
+                             f"(priority: {suggestion.priority})")
+                console.print(f"Line {suggestion.range.start.line}: {suggestion.message}")
+                
+                if suggestion.quick_fixes:
+                    console.print("[cyan]Quick fixes available:[/cyan]")
+                    for i, fix in enumerate(suggestion.quick_fixes, 1):
+                        console.print(f"  {i}. {fix.title}: {fix.description}")
+    
+    async def analyze_file_async(file_path):
+        """Analyze a file asynchronously."""
+        suggestions = await engine.analyze_file_async(file_path)
+        filtered = filter_suggestions(suggestions)
+        display_suggestions(filtered, file_path)
+        
+        # Apply fixes if requested
+        if fix and filtered:
+            console.print("\n[yellow]Auto-fix not implemented yet[/yellow]")
+        
+        return filtered
+    
+    # Main analysis
+    try:
+        if path.is_file():
+            # Analyze single file
+            asyncio.run(analyze_file_async(path))
+            
+            if watch:
+                console.print(f"\n[yellow]Watching {path} for changes...[/yellow]")
+                
+                class FileChangeHandler(FileSystemEventHandler):
+                    def on_modified(self, event):
+                        if not event.is_directory and event.src_path == str(path):
+                            console.print(f"\n[blue]File changed: {event.src_path}[/blue]")
+                            asyncio.run(analyze_file_async(Path(event.src_path)))
+                
+                event_handler = FileChangeHandler()
+                observer = Observer()
+                observer.schedule(event_handler, str(path.parent), recursive=False)
+                observer.start()
+                
+                try:
+                    while True:
+                        time.sleep(1)
+                except KeyboardInterrupt:
+                    observer.stop()
+                    console.print("\n[yellow]Stopped watching[/yellow]")
+                observer.join()
+        else:
+            # Analyze directory
+            import glob
+            py_files = list(path.glob("**/*.py"))
+            
+            if not py_files:
+                console.print(f"[yellow]No Python files found in {path}[/yellow]")
+                return
+            
+            console.print(f"[blue]Analyzing {len(py_files)} files...[/blue]")
+            
+            all_suggestions = {}
+            
+            async def analyze_all():
+                tasks = []
+                for file_path in py_files:
+                    tasks.append(engine.analyze_file_async(file_path))
+                
+                results = await asyncio.gather(*tasks)
+                
+                for file_path, suggestions in zip(py_files, results):
+                    filtered = filter_suggestions(suggestions)
+                    if filtered:
+                        all_suggestions[str(file_path)] = filtered
+                        display_suggestions(filtered, file_path)
+            
+            asyncio.run(analyze_all())
+            
+            # Summary
+            total_suggestions = sum(len(s) for s in all_suggestions.values())
+            console.print(f"\n[green]Analysis complete:[/green] "
+                         f"{total_suggestions} suggestions in {len(all_suggestions)} files")
+    
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Suggestion error: {e}", exc_info=True)
 
 
 @cli.group()
