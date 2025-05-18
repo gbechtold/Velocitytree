@@ -142,3 +142,27 @@ context.md
 flattened*
 config/user_config.yaml
 config/local_config.yaml
+
+# Monitoring and alerts
+alerts.json
+alerts.log
+metrics.json
+drift_report.json
+suggestions.json
+
+# Machine learning models
+*.pkl
+*.joblib
+ml_models/
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# Demo and test files
+demo_*
+test_output/
+
+# Archives
+archives/

@@ -5,7 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2024-05-18
+
+### Added
+- **Continuous Monitoring & Evaluation** (Milestone 5.2)
+  - Background monitoring process with configurable intervals
+  - Real-time drift detection from specifications
+  - Multi-channel alert system (log, file, email, webhook, console)
+  - AI-powered realignment suggestions
+  - Support for OpenAPI, README, and architecture specifications
+  - Performance and security monitoring
+  
+- **Advanced Analytics** (Milestone 5.3)
+  - ML-based predictive completion estimates
+  - Confidence intervals and risk factors
+  - Velocity tracking and burndown charts
+  - Feature-level progress predictions
+  
+- **Claude AI Integration** (Milestone 5.4)
+  - Native support for Anthropic's Claude
+  - Efficient context streaming for large files
+  - Specialized prompt templates
+  - Intelligent response caching
+  
+- **Smart Documentation** (Milestone 4.2)
+  - Context-aware documentation generation
+  - Quality scoring and validation
+  - Incremental documentation updates
+  - Smart template selection
+  
+- **Real-time Suggestions** (Milestone 4.3)
+  - Interactive code analysis sessions
+  - Refactoring recommendations
+  - Performance optimization suggestions
+  - Learning from user feedback
+  
+- **Workflow Memory** (Milestone 5.1)
+  - Decision history tracking
+  - Precedent retrieval system
+  - Conflict detection
+
+### Changed
+- Enhanced README with v2.0 features
+- Updated dependency requirements
+- Improved CLI command structure
+- Reorganized monitoring commands
+
+### Fixed
+- Flask dependency issues in requirements.txt
+- Import errors in monitoring modules
+- Test coverage for new features
+
+## [1.0.0] - 2024-05-17
 
 ### Added
 - **Conversational Project Planning**: Interactive dialogue-based planning (Milestone 2)

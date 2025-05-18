@@ -28,7 +28,8 @@
       "Bash(grep:*)",
       "Bash(git reset:*)",
       "Bash(rm:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }

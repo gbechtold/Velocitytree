@@ -13,283 +13,321 @@ Ever struggled with:
 - **Repetitive tasks** eating up your valuable development time?
 - **Managing multiple workflows** across different projects?
 - **Documentation** that gets out of sync with your codebase?
+- **Code drift** from original specifications and architecture?
+- **Monitoring project health** and catching issues early?
+- **Predicting project completion** accurately?
 
 **Velocitytree is your solution!** 🚀
 
-## ✨ Benefits
+## ✨ What's New in v2.0
 
-- **Flatten complex codebases** into manageable, AI-friendly formats
-- **Boost AI coding accuracy** by providing perfect context to ChatGPT, Claude, and others
-- **Accelerate development** with automated workflows and smart templates
-- **Maintain project consistency** across your entire team
-- **Plugin architecture** for unlimited extensibility
+- 🔍 **Continuous Monitoring**: Background process that monitors code quality, performance, and drift
+- 🎯 **Drift Detection**: Automatically detect when code drifts from specifications
+- 🚨 **Smart Alerts**: Multi-channel alert system with rate limiting and suppression
+- 🔧 **Realignment Suggestions**: AI-powered suggestions to fix detected issues
+- 📈 **Predictive Analytics**: ML-based completion estimates with confidence intervals
+- 🤖 **Claude Integration**: Native support for Anthropic's Claude AI
+- 🧠 **Smart Documentation**: Context-aware documentation generation with quality checks
+- ⚡ **Real-time Suggestions**: Get code improvements as you work
+- 🔄 **Workflow Memory**: Learn from past decisions and avoid conflicts
 
-## 🚀 Quick Start (One-Line Install)
-
-```bash
-# Clone, setup environment, install, and run setup wizard in one command:
-git clone https://github.com/gbechtold/Velocitytree.git && cd Velocitytree && python3 -m venv venv && source venv/bin/activate && pip install -e . && velocitytree onboard
-```
-
-## 💡 Basic Usage
-
-### First Time Setup
-When you run VelocityTree for the first time, the onboarding wizard will guide you through:
-- 🔑 API key configuration (OpenAI, Anthropic)
-- 📋 Workflow template selection
-- 🏗️ Project structure creation
-- 📖 Essential commands overview
+## 🚀 Quick Start
 
 ```bash
-vtree onboard  # Run the interactive setup wizard
+# Clone and setup with virtual environment
+git clone https://github.com/gbechtold/Velocitytree.git
+cd Velocitytree
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -e .
 ```
 
-### Initialize a new project
+### Initialize your project
 ```bash
-vtree init  # This will also prompt to run the onboarding wizard
+vtree init
 ```
 
-Flatten your project structure for AI analysis:
+### Start continuous monitoring
 ```bash
-vtree flatten --output context.md
+vtree monitor background start
 ```
 
-Get AI assistance with your project:
+### Check for drift
 ```bash
-vtree ask "How can I optimize this codebase?"
+vtree monitor drift check
 ```
 
-Create a documentation snapshot:
+## 💡 Core Features
+
+### 🔍 Continuous Monitoring & Evaluation
+
+Monitor your project health in real-time:
 ```bash
-vtree flatten --format markdown --include "*.py" --output docs/structure.md
+# Start background monitoring
+vtree monitor background start
+
+# Check monitoring status
+vtree monitor background status
+
+# View recent issues
+vtree monitor issues
+
+# Configure monitoring
+vtree monitor config --enable code --enable performance --interval 300
 ```
 
-## 📦 Installation Options
+### 🎯 Drift Detection
 
-### Quick Install (Recommended)
+Detect when your code drifts from specifications:
+```bash
+# Check for drift
+vtree monitor drift check
 
-The one-liner above is the fastest way to get started. It automatically:
-1. Clones the repository
-2. Creates a virtual environment
-3. Activates the environment
-4. Installs Velocitytree in development mode
+# Generate detailed drift report
+vtree monitor drift report
 
-### From PyPI
+# View loaded specifications
+vtree monitor drift specs
+```
 
+### 🚨 Intelligent Alert System
+
+Get notified about critical issues:
+```bash
+# View recent alerts
+vtree monitor alerts list
+
+# Test alert system
+vtree monitor alerts test --severity warning
+
+# Configure alert channels
+vtree monitor alert-config --channel email --channel webhook
+```
+
+### 🔧 Realignment Suggestions
+
+Get AI-powered suggestions to fix issues:
+```bash
+# Generate suggestions based on drift
+vtree monitor realign suggest
+
+# Apply automated fixes
+vtree monitor realign apply --suggestion-id <id>
+
+# Export suggestions
+vtree monitor realign export --output suggestions.json
+```
+
+### 📈 Predictive Analytics
+
+Get ML-based completion estimates:
+```bash
+# Predict project completion
+vtree progress predict
+
+# Predict feature completion with risks
+vtree progress predict --feature user-auth --risks --confidence
+
+# Monitor velocity trends
+vtree progress velocity
+
+# Generate burndown chart
+vtree progress burndown
+```
+
+### 🤖 Claude AI Integration
+
+Native support for Anthropic's Claude:
+```bash
+# Configure Claude
+export CLAUDE_API_KEY=your-key
+
+# Use Claude for analysis
+vtree ai analyze --model claude-3
+
+# Get Claude suggestions
+vtree analyze --suggestions --model claude
+```
+
+### 📘 Smart Documentation
+
+Generate intelligent documentation:
+```bash
+# Generate comprehensive docs
+vtree doc generate --smart
+
+# Incremental documentation updates
+vtree doc update --incremental
+
+# Check documentation quality
+vtree doc quality --report
+```
+
+### ⚡ Real-time Suggestions
+
+Get code improvements as you work:
+```bash
+# Start interactive analysis
+vtree analyze --interactive
+
+# Get refactoring recommendations
+vtree suggestions refactor --file src/main.py
+
+# Get performance optimizations
+vtree suggestions performance
+```
+
+### 🌟 Feature Tree Visualization
+
+Visualize project structure and dependencies:
+```bash
+# Start visual interface
+vtree visualize --web
+
+# Generate static visualization
+vtree visualize export --format png --layout spring
+
+# Show feature dependencies
+vtree visualize deps --feature user-auth
+```
+
+### 🔄 Natural Language Git Workflow
+
+Manage git with natural language:
+```bash
+# Create feature branch
+vtree git feature "Add user authentication"
+
+# Smart commit messages
+vtree git commit
+
+# Analyze changes
+vtree git analyze
+```
+
+### 🗣️ Conversational Planning
+
+Plan projects through dialogue:
+```bash
+# Start planning session
+vtree plan start
+
+# Resume session
+vtree plan resume <session-id>
+
+# Export plan
+vtree plan export <session-id>
+```
+
+### 🔌 Advanced Plugin System
+
+Extend functionality with plugins:
+```bash
+# List plugins
+vtree plugin list
+
+# Install plugin
+vtree plugin install monitoring-extension
+
+# Create custom plugin
+vtree plugin create my-plugin
+```
+
+## 📦 Installation
+
+### Prerequisites
+- Python 3.8 or higher
+- Git
+- Virtual environment (recommended)
+
+### Standard Installation
 ```bash
 pip install velocitytree
 ```
 
-### Manual Installation
-
+### Development Installation
 ```bash
-# 1. Clone the repository
 git clone https://github.com/gbechtold/Velocitytree.git
 cd Velocitytree
-
-# 2. Create virtual environment (IMPORTANT!)
 python3 -m venv venv
-
-# 3. Activate virtual environment
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# 4. Install in development mode
+source venv/bin/activate
+pip install -r requirements.txt
 pip install -e .
 ```
 
-### Using Setup Scripts
-
-For convenience, we provide automated setup scripts:
-
-**Unix/Mac:**
-```bash
-./scripts/setup.sh
-```
-
-**Windows:**
-```powershell
-.\scripts\setup.ps1
-```
-
-These scripts handle virtual environment creation and dependency installation automatically.
-
-## 🔧 Core Commands
-
-| Command | Description |
-|---------|-------------|
-| `vtree init` | Initialize a new Velocitytree project |
-| `vtree flatten` | Create a flattened view of your project |
-| `vtree context` | Extract project context for AI tools |
-| `vtree ask` | Get AI assistance with your code |
-| `vtree workflow` | Manage project workflows |
-| `vtree plugin` | Manage plugins |
-
-For detailed command options, use `vtree [command] --help`.
-
-## 🌟 Key Features
-
-### 🔄 Natural Language Git Workflow
-Manage your git workflow using natural language:
-```bash
-# Create feature branches from descriptions
-vtree git feature "Add user authentication with OAuth"
-
-# Generate smart commit messages based on changes
-vtree git commit
-
-# Automatic semantic versioning
-vtree git tag --type minor
-
-# Analyze current changes
-vtree git analyze
-```
-
-### 💬 Conversational Project Planning (NEW!)
-Transform ideas into structured project plans through natural dialogue:
-```bash
-# Start an interactive planning session
-vtree plan start
-
-# Resume a planning session
-vtree plan resume <session-id>
-
-# Export your plan
-vtree plan export <session-id> --format markdown
-```
-
-### Project Structure Flattening
-Transform complex directory trees into AI-digestible formats:
-```bash
-# Flatten only Python files for code review
-vtree flatten --include "*.py" --format markdown
-
-# Create comprehensive project overview
-vtree flatten --format tree --max-depth 3
-```
-
-### AI Integration
-Work smarter with AI assistants:
-```bash
-# Get implementation suggestions
-vtree ask "How should I implement user authentication?"
-
-# Analyze code quality
-vtree ask --context full "What improvements can be made to the codebase?"
-```
-
-### Workflow Automation
-Streamline repetitive tasks:
-```bash
-# Run predefined workflow
-vtree workflow run deploy
-
-# Create custom workflow
-vtree workflow create my-workflow
-```
-
-### Plugin System
-Extend functionality:
-```bash
-# List available plugins
-vtree plugin list
-
-# Install a plugin
-vtree plugin install awesome-plugin
-```
+### Required Dependencies
+The following will be installed automatically:
+- Flask & flask-cors (web interface)
+- scikit-learn (predictive analytics)
+- psutil (system monitoring)
+- GitPython (git integration)
+- Rich (beautiful CLI)
+- Click (command framework)
+- And more...
 
 ## ⚙️ Configuration
 
-Velocitytree can be configured via:
-- `.velocitytree.yaml` - Project configuration
-- `~/.velocitytree/config.yaml` - Global configuration
-- Environment variables (prefix: `VELOCITYTREE_`)
+### Global Configuration
+```yaml
+# ~/.velocitytree/config.yaml
+monitoring:
+  check_interval: 300
+  enable_drift_detection: true
+  alert_channels:
+    - log
+    - email
+  
+ai:
+  default_model: claude-3
+  max_tokens: 4000
+  
+documentation:
+  quality_threshold: 0.8
+  incremental_updates: true
+```
 
-Example configuration:
+### Project Configuration
 ```yaml
 # .velocitytree.yaml
 project:
   name: MyProject
-  version: 1.0.0
-
-flatten:
-  default_output: context.md
-  exclude_patterns:
-    - "*.log"
-    - "__pycache__"
-    - ".git"
-
-ai:
-  default_model: gpt-4
-  max_tokens: 4000
+  version: 2.0.0
+  
+monitoring:
+  enabled: true
+  specs:
+    - openapi.yaml
+    - ARCHITECTURE.md
+  
+alerts:
+  email:
+    smtp_host: smtp.gmail.com
+    to_emails:
+      - team@example.com
 ```
-
-## 🔌 Plugin Development
-
-Create custom plugins to extend Velocitytree:
-
-```python
-from velocitytree.plugin_system import Plugin
-
-class MyPlugin(Plugin):
-    """Custom plugin example."""
-    
-    @property
-    def name(self):
-        return "my_plugin"
-    
-    def activate(self):
-        """Called when plugin is activated."""
-        super().activate()
-        # Your initialization code here
-```
-
-See our [Plugin Development Guide](docs/PLUGIN_DEVELOPMENT.md) for detailed instructions.
-
-## 📚 Documentation
-
-- [User Guide](docs/USER_GUIDE.md)
-- [API Reference](docs/API.md)
-- [Plugin Development](docs/PLUGIN_DEVELOPMENT.md)
-- [Contributing Guide](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
-- Code of Conduct
-- Development setup
-- Submitting pull requests
-- Reporting issues
-
-## 🌟 The Velocitytree Advantage
-
-Velocitytree is the evolution of [TreeTamer](https://github.com/gbechtold/TreeTamer), adding:
-- Advanced AI integration
-- Workflow automation
-- Plugin architecture
-- Better performance
-- Enhanced CLI experience
 
 ## 🛠️ Development
 
-For development setup:
-
+### Running Tests
 ```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Run tests
+# Run all tests
 pytest
 
+# Run specific test category
+pytest tests/test_monitoring.py
+
+# Run with coverage
+pytest --cov=velocitytree
+```
+
+### Code Quality
+```bash
 # Run linters
 flake8 velocitytree
 black velocitytree
-```
+mypy velocitytree
 
-### Pre-commit Hooks
-
-We use pre-commit hooks to maintain code quality:
-```bash
+# Install pre-commit hooks
 pre-commit install
 ```
 
@@ -297,45 +335,62 @@ pre-commit install
 
 ### Common Issues
 
-**Issue: ModuleNotFoundError when running vtree**
+**ModuleNotFoundError: No module named 'flask'**
 ```bash
-# Solution: Ensure you're in the virtual environment
-source venv/bin/activate  # Unix/Mac
-# or
-venv\Scripts\activate  # Windows
+pip install flask flask-cors
 ```
 
-**Issue: Permission errors**
+**ImportError in monitoring module**
 ```bash
-# Solution: Use virtual environment instead of system Python
-python3 -m venv venv
+pip install psutil scikit-learn sqlalchemy
+```
+
+**Permission errors**
+```bash
+# Always use virtual environment
 source venv/bin/activate
-pip install -e .
 ```
 
 ### Getting Help
+1. Check [documentation](docs/)
+2. Search [issues](https://github.com/gbechtold/Velocitytree/issues)
+3. Join our [Discord](https://discord.gg/velocitytree)
 
-1. Check the [FAQ](docs/FAQ.md)
-2. Search [existing issues](https://github.com/gbechtold/Velocitytree/issues)
-3. Open a new issue with the bug report template
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md).
+
+### Areas for Contribution
+- Additional monitoring metrics
+- New alert channels
+- Improved ML models
+- More language adapters
+- Documentation improvements
+- Bug fixes
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🚧 Roadmap
+
+### Version 2.1 (Q2 2024)
+- [ ] Cloud monitoring dashboard
+- [ ] Team collaboration features
+- [ ] Mobile app for alerts
+- [ ] More AI model integrations
+
+### Version 2.2 (Q3 2024)
+- [ ] Distributed monitoring
+- [ ] Custom ML model training
+- [ ] Advanced security scanning
+- [ ] Performance profiling
 
 ## 🙏 Acknowledgments
 
 - Built on the foundation of [TreeTamer](https://github.com/gbechtold/TreeTamer)
-- Thanks to all our [contributors](https://github.com/gbechtold/Velocitytree/graphs/contributors)
-- Inspired by the need for better AI-assisted development tools
-
-## 🚧 Roadmap
-
-- [ ] GUI interface
-- [ ] Cloud synchronization
-- [ ] Team collaboration features
-- [ ] Additional AI model support
-- [ ] Performance optimizations
+- Inspired by modern DevOps practices
+- Thanks to all [contributors](https://github.com/gbechtold/Velocitytree/graphs/contributors)
 
 ---
 

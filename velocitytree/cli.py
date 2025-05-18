@@ -24,6 +24,7 @@ from .onboarding import create_onboarding_command
 from .web_server import FeatureGraphWebServer
 from .git_integration import GitFeatureTracker, GitWorkflowIntegration
 from .progress_tracking import ProgressCalculator
+from .continuous_eval import ContinuousMonitor, AlertSystem, DriftDetector, RealignmentEngine
 
 console = Console()
 
@@ -2184,6 +2185,112 @@ def milestone_progress(ctx, project):
         logger.error(f"Milestone progress error: {e}", exc_info=True)
 
 
+@progress.command('predict')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--feature', '-f', help='Predict specific feature completion')
+@click.option('--confidence', '-c', is_flag=True, help='Show confidence intervals')
+@click.option('--risks', '-r', is_flag=True, help='Show risk factors')
+@click.option('--format', type=click.Choice(['text', 'json']), default='text',
+              help='Output format')
+@click.pass_context
+def predict_completion(ctx, project, feature, confidence, risks, format):
+    """Predict completion dates using machine learning."""
+    from .core import VelocityTree
+    import json
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        calculator = ProgressCalculator(vt.feature_graph)
+        
+        # Get prediction
+        prediction = calculator.predict_completion(feature_id=feature)
+        
+        if format == 'json':
+            # JSON output
+            output = {
+                'predicted_date': prediction.predicted_date.isoformat(),
+                'confidence': prediction.confidence,
+                'confidence_interval': [
+                    prediction.confidence_interval[0].isoformat(),
+                    prediction.confidence_interval[1].isoformat()
+                ],
+                'risk_factors': prediction.risk_factors,
+                'recommendations': prediction.recommendations
+            }
+            console.print(json.dumps(output, indent=2))
+        else:
+            # Text output
+            if feature:
+                feature_obj = vt.feature_graph.features[feature]
+                console.print(f"\n[cyan]Feature:[/cyan] {feature_obj.name}")
+            else:
+                console.print("\n[cyan]Project Completion Prediction[/cyan]")
+            
+            console.print(f"[green]Predicted completion:[/green] {prediction.predicted_date.strftime('%Y-%m-%d')}")
+            console.print(f"[blue]Confidence:[/blue] {prediction.confidence:.1%}")
+            
+            if confidence or prediction.confidence < 0.7:
+                console.print(f"\n[yellow]Confidence Interval:[/yellow]")
+                console.print(f"  Earliest: {prediction.confidence_interval[0].strftime('%Y-%m-%d')}")
+                console.print(f"  Latest:   {prediction.confidence_interval[1].strftime('%Y-%m-%d')}")
+            
+            if risks or prediction.risk_factors:
+                console.print(f"\n[red]Risk Factors:[/red]")
+                for risk in prediction.risk_factors:
+                    console.print(f"  • {risk}")
+            
+            if prediction.recommendations:
+                console.print(f"\n[blue]Recommendations:[/blue]")
+                for i, rec in enumerate(prediction.recommendations, 1):
+                    console.print(f"  {i}. {rec}")
+    
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Prediction error: {e}", exc_info=True)
+
+
+@progress.command('train')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--history', type=click.Path(exists=True),
+              help='Path to historical completion data')
+@click.pass_context
+def train_model(ctx, project, history):
+    """Train or update the completion prediction model."""
+    from .core import VelocityTree
+    import json
+    
+    try:
+        # Load project
+        vt = VelocityTree(project)
+        calculator = ProgressCalculator(vt.feature_graph)
+        
+        with console.status("Training prediction model..."):
+            if history:
+                # Load historical data
+                with open(history, 'r') as f:
+                    historical_data = json.load(f)
+                
+                # Update history
+                for entry in historical_data:
+                    calculator.update_completion_history(
+                        entry['feature_id'],
+                        datetime.fromisoformat(entry['completion_date'])
+                    )
+            
+            # Train model
+            calculator._train_model()
+        
+        console.print("[green]✓[/green] Model trained successfully")
+        console.print(f"Training samples: {len(calculator._velocity_history)}")
+        
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Training error: {e}", exc_info=True)
+
+
 @cli.group()
 def doc():
     """Documentation generation commands."""
@@ -3050,6 +3157,976 @@ def visualize_web(ctx, host, port, project):
         console.print("\n[yellow]Server stopped[/yellow]")
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
+
+
+@cli.group()
+def monitor():
+    """Continuous monitoring and evaluation commands."""
+    pass
+
+
+@monitor.command('start')
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--interval', '-i', type=float, default=1.0,
+              help='Monitoring interval in seconds')
+@click.option('--cpu-limit', '-c', type=float, default=20.0,
+              help='Maximum CPU usage percentage')
+@click.option('--batch-size', '-b', type=int, default=10,
+              help='Batch size for processing changes')
+@click.option('--daemon', '-d', is_flag=True,
+              help='Run as daemon/background process')
+@click.pass_context
+def monitor_start(ctx, project, interval, cpu_limit, batch_size, daemon):
+    """Start continuous monitoring for code drift and quality issues."""
+    from .continuous_eval import ContinuousMonitor, MonitorConfig
+    
+    # Create monitor configuration
+    config = MonitorConfig(
+        scan_interval=interval,
+        max_cpu_percent=cpu_limit,
+        batch_size=batch_size,
+        enabled_checks=['drift', 'quality', 'security', 'performance']
+    )
+    
+    # Create monitor
+    monitor = ContinuousMonitor(config=config)
+    
+    if daemon:
+        # Run as daemon
+        console.print("[yellow]Daemon mode not yet implemented[/yellow]")
+        return
+    
+    console.print(f"[blue]Starting continuous monitoring...[/blue]")
+    console.print(f"Project: {project}")
+    console.print(f"Interval: {interval}s")
+    console.print(f"CPU Limit: {cpu_limit}%")
+    console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+    
+    try:
+        # Start monitoring
+        monitors = monitor.start_monitoring(project)
+        console.print(f"[green]✓[/green] Monitoring {len(monitors)} files")
+        
+        # Keep running
+        while True:
+            time.sleep(1)
+            
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Stopping monitor...[/yellow]")
+        monitor.stop_monitoring()
+        console.print("[green]✓[/green] Monitor stopped")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Monitor error: {e}", exc_info=True)
+
+
+@monitor.command('stop')
+@click.pass_context
+def monitor_stop(ctx):
+    """Stop continuous monitoring."""
+    from .continuous_eval import ContinuousMonitor
+    
+    monitor = ContinuousMonitor()
+    monitor.stop_monitoring()
+    console.print("[green]✓[/green] Monitor stopped")
+
+
+@monitor.command('status')
+@click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.pass_context
+def monitor_status(ctx, format):
+    """Show monitoring status and statistics."""
+    from .continuous_eval import ContinuousMonitor
+    
+    monitor = ContinuousMonitor()
+    status = monitor.get_monitoring_status()
+    
+    if format == 'json':
+        import json
+        console.print(json.dumps(status, indent=2))
+    else:
+        # Display as table
+        console.print("[blue]Monitoring Status[/blue]\n")
+        
+        table = Table()
+        table.add_column("Property", style="cyan")
+        table.add_column("Value", style="yellow")
+        
+        table.add_row("Status", "Active" if status['is_running'] else "Stopped")
+        table.add_row("Files Monitored", str(status['files_monitored']))
+        table.add_row("Changes Detected", str(status['changes_detected']))
+        table.add_row("Evaluations Run", str(status['evaluations_run']))
+        table.add_row("CPU Usage", f"{status['cpu_usage']:.1f}%")
+        table.add_row("Memory Usage", f"{status['memory_usage']:.1f} MB")
+        
+        console.print(table)
+
+
+@monitor.command('alerts')
+@click.option('--type', '-t', type=click.Choice([
+    'drift_detected', 'quality_degradation', 'security_issue',
+    'performance_regression', 'dependency_update', 'complexity_increase',
+    'coverage_drop', 'documentation_stale'
+]), help='Filter by alert type')
+@click.option('--severity', '-s', type=click.Choice(['info', 'warning', 'error', 'critical']),
+              help='Filter by severity')
+@click.option('--limit', '-l', type=int, default=20,
+              help='Number of alerts to show')
+@click.option('--unresolved', '-u', is_flag=True,
+              help='Show only unresolved alerts')
+@click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.pass_context
+def monitor_alerts(ctx, type, severity, limit, unresolved, format):
+    """View monitoring alerts."""
+    from .continuous_eval import AlertSystem, AlertType, AlertSeverity
+    
+    alert_system = AlertSystem()
+    
+    # Build filters
+    filters = {}
+    if type:
+        filters['type'] = AlertType(type)
+    if severity:
+        filters['severity'] = AlertSeverity[severity.upper()]
+    if unresolved:
+        filters['resolved'] = False
+    
+    # Get alerts
+    alerts = alert_system.get_alerts(limit=limit, **filters)
+    
+    if format == 'json':
+        import json
+        alert_dicts = [alert.to_dict() for alert in alerts]
+        console.print(json.dumps(alert_dicts, indent=2))
+    else:
+        # Display as table
+        if not alerts:
+            console.print("[yellow]No alerts found[/yellow]")
+            return
+        
+        table = Table(title="Monitoring Alerts")
+        table.add_column("ID", style="cyan")
+        table.add_column("Type", style="yellow")
+        table.add_column("Severity", style="red")
+        table.add_column("Title", style="white")
+        table.add_column("File", style="blue")
+        table.add_column("Time", style="green")
+        
+        for alert in alerts:
+            severity_color = {
+                'INFO': 'green',
+                'WARNING': 'yellow',
+                'ERROR': 'red',
+                'CRITICAL': 'red on white'
+            }.get(alert.severity.name, 'white')
+            
+            file_str = str(alert.file_path) if alert.file_path else "-"
+            if alert.line_number:
+                file_str += f":{alert.line_number}"
+            
+            table.add_row(
+                str(alert.alert_id),
+                alert.type.value,
+                f"[{severity_color}]{alert.severity.name}[/{severity_color}]",
+                alert.title[:50] + "..." if len(alert.title) > 50 else alert.title,
+                file_str,
+                alert.timestamp.strftime("%Y-%m-%d %H:%M")
+            )
+        
+        console.print(table)
+
+
+@monitor.command('resolve')
+@click.argument('alert_id', type=int)
+@click.pass_context
+def monitor_resolve(ctx, alert_id):
+    """Mark an alert as resolved."""
+    from .continuous_eval import AlertSystem
+    
+    alert_system = AlertSystem()
+    alert_system.resolve_alert(alert_id)
+    console.print(f"[green]✓[/green] Alert {alert_id} marked as resolved")
+
+
+@monitor.command('suggest')
+@click.argument('alert_id', type=int, required=False)
+@click.option('--file', '-f', type=click.Path(exists=True),
+              help='Generate suggestions for specific file')
+@click.option('--interactive', '-i', is_flag=True,
+              help='Interactive mode for applying suggestions')
+@click.option('--output', '-o', type=click.Path(),
+              help='Save suggestions to file')
+@click.pass_context
+def monitor_suggest(ctx, alert_id, file, interactive, output):
+    """Generate realignment suggestions for drift or issues."""
+    from .continuous_eval import AlertSystem, DriftDetector, RealignmentEngine
+    from pathlib import Path
+    
+    alert_system = AlertSystem()
+    drift_detector = DriftDetector()
+    realignment_engine = RealignmentEngine()
+    
+    if alert_id:
+        # Get specific alert
+        alerts = alert_system.get_alerts(type=AlertType.DRIFT_DETECTED)
+        alert = next((a for a in alerts if a.alert_id == alert_id), None)
+        
+        if not alert:
+            console.print(f"[red]Alert {alert_id} not found[/red]")
+            return
+        
+        # Get drift report for the file
+        drift_report = drift_detector.check_file_drift(alert.file_path)
+    else:
+        # Check specific file or current directory
+        file_path = Path(file) if file else Path.cwd()
+        drift_report = drift_detector.check_file_drift(file_path)
+    
+    if not drift_report or not drift_report.drifts:
+        console.print("[green]No drift detected[/green]")
+        return
+    
+    # Generate suggestions
+    suggestions = realignment_engine.generate_suggestions(drift_report)
+    
+    if not suggestions:
+        console.print("[yellow]No suggestions available[/yellow]")
+        return
+    
+    # Display or save suggestions
+    if output:
+        import json
+        with open(output, 'w') as f:
+            json.dump([s.to_dict() for s in suggestions], f, indent=2)
+        console.print(f"[green]✓[/green] Suggestions saved to {output}")
+    else:
+        console.print(f"[blue]Realignment Suggestions ({len(suggestions)})[/blue]\n")
+        
+        for i, suggestion in enumerate(suggestions, 1):
+            console.print(f"[bold]{i}. {suggestion.title}[/bold]")
+            console.print(f"   Category: [yellow]{suggestion.category.value}[/yellow]")
+            console.print(f"   Priority: {suggestion.priority}/5")
+            console.print(f"   Effort: {suggestion.effort}/5")
+            console.print(f"   {suggestion.description}")
+            
+            if suggestion.code_snippet:
+                console.print("   [dim]Code snippet:[/dim]")
+                console.print(f"   {suggestion.code_snippet[:100]}...")
+            
+            if interactive:
+                from rich.prompt import Confirm
+                if Confirm.ask("Apply this suggestion?"):
+                    # Would implement actual application here
+                    console.print("[green]Suggestion would be applied[/green]")
+            
+            console.print()
+
+
+@monitor.command('summary')
+@click.option('--days', '-d', type=int, default=7,
+              help='Number of days to include in summary')
+@click.pass_context
+def monitor_summary(ctx, days):
+    """Show monitoring summary and trends."""
+    from .continuous_eval import AlertSystem
+    
+    alert_system = AlertSystem()
+    summary = alert_system.get_alert_summary()
+    
+    console.print("[blue]Monitoring Summary[/blue]\n")
+    
+    # Overall stats
+    console.print(f"Total Unresolved Alerts: [red]{summary['total_unresolved']}[/red]")
+    console.print(f"Recent Alerts (last hour): [yellow]{summary['recent_count']}[/yellow]")
+    
+    # By type
+    console.print("\n[cyan]Alerts by Type:[/cyan]")
+    for alert_type, count in summary['by_type'].items():
+        console.print(f"  {alert_type}: {count}")
+    
+    # By severity
+    console.print("\n[cyan]Alerts by Severity:[/cyan]")
+    for severity, count in summary['by_severity'].items():
+        color = {
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'red on white'
+        }.get(severity, 'white')
+        console.print(f"  [{color}]{severity}[/{color}]: {count}")
+    
+    # Top files
+    if summary['top_files']:
+        console.print("\n[cyan]Files with Most Alerts:[/cyan]")
+        for file_info in summary['top_files']:
+            console.print(f"  {file_info['file']}: {file_info['count']} alerts")
+
+
+@monitor.command('background')
+@click.argument('action', type=click.Choice(['start', 'stop', 'status']))
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--interval', '-i', type=int, default=300,
+              help='Check interval in seconds (default: 300)')
+@click.option('--config', '-c', type=click.Path(exists=True),
+              help='Configuration file for monitoring')
+@click.pass_context
+def monitor_background(ctx, action, project, interval, config):
+    """Manage background monitoring process."""
+    from .monitoring import BackgroundMonitor, MonitoringConfig
+    from pathlib import Path
+    import json
+    
+    project_path = Path(project).resolve()
+    
+    # Load config if provided
+    monitor_config = MonitoringConfig(check_interval=interval)
+    if config:
+        with open(config) as f:
+            config_data = json.load(f)
+            monitor_config = MonitoringConfig(**config_data)
+    
+    # Create monitor
+    monitor = BackgroundMonitor(project_path, monitor_config)
+    
+    if action == 'start':
+        monitor.start()
+        console.print(f"[green]✓[/green] Background monitor started for {project_path}")
+        console.print(f"Check interval: {monitor_config.check_interval} seconds")
+        
+    elif action == 'stop':
+        monitor.stop()
+        console.print("[green]✓[/green] Background monitor stopped")
+        
+    elif action == 'status':
+        status = monitor.get_status()
+        
+        console.print("[blue]Background Monitor Status[/blue]\n")
+        console.print(f"Status: [yellow]{status['status']}[/yellow]")
+        
+        # Display metrics
+        metrics = status['metrics']
+        console.print(f"\nLast Check: {metrics['last_check']}")
+        console.print(f"Checks Completed: {metrics['checks_completed']}")
+        console.print(f"Issues Detected: {metrics['issues_detected']}")
+        console.print(f"Alerts Sent: {metrics['alerts_sent']}")
+        
+        # Display enabled monitors
+        enabled = status['config']['enabled_monitors']
+        console.print("\n[cyan]Enabled Monitors:[/cyan]")
+        for monitor_type, is_enabled in enabled.items():
+            status_icon = "[green]✓[/green]" if is_enabled else "[red]✗[/red]"
+            console.print(f"  {status_icon} {monitor_type}")
+        
+        # Display recent issues
+        if status['recent_issues']:
+            console.print(f"\n[yellow]Recent Issues:[/yellow]")
+            for issue in status['recent_issues'][-5:]:  # Show last 5
+                console.print(f"  [{issue['severity']}] {issue['type']}: {issue['description']}")
+
+
+@monitor.command('issues')
+@click.option('--severity', '-s', type=click.Choice(['info', 'warning', 'error', 'critical']),
+              help='Filter by severity level')
+@click.option('--limit', '-l', type=int, default=20,
+              help='Limit number of issues shown')
+@click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.pass_context
+def monitor_issues(ctx, severity, limit, format):
+    """Show monitoring issues."""
+    from .monitoring import BackgroundMonitor
+    from pathlib import Path
+    import json
+    
+    monitor = BackgroundMonitor(Path.cwd())
+    issues = monitor.get_issues(severity=severity)[:limit]
+    
+    if format == 'json':
+        console.print(json.dumps(issues, indent=2))
+    else:
+        if not issues:
+            console.print("[yellow]No issues found[/yellow]")
+            return
+        
+        table = Table(title="Monitoring Issues")
+        table.add_column("Timestamp", style="cyan")
+        table.add_column("Type", style="yellow")
+        table.add_column("Severity", style="red")
+        table.add_column("Description", style="white")
+        
+        for issue in issues:
+            severity_color = {
+                'info': 'green',
+                'warning': 'yellow',
+                'error': 'red',
+                'critical': 'red on white'
+            }.get(issue['severity'], 'white')
+            
+            table.add_row(
+                issue['timestamp'][:19],  # Just date/time, no milliseconds
+                issue['type'],
+                f"[{severity_color}]{issue['severity'].upper()}[/{severity_color}]",
+                issue['description'][:60] + "..." if len(issue['description']) > 60 else issue['description']
+            )
+        
+        console.print(table)
+
+
+@monitor.command('config')
+@click.option('--show', is_flag=True, help='Show current configuration')
+@click.option('--output', '-o', type=click.Path(),
+              help='Save configuration to file')
+@click.option('--enable', '-e', multiple=True,
+              type=click.Choice(['git', 'code', 'performance', 'drift']),
+              help='Enable specific monitors')
+@click.option('--disable', '-d', multiple=True,
+              type=click.Choice(['git', 'code', 'performance', 'drift']),
+              help='Disable specific monitors')
+@click.option('--interval', '-i', type=int,
+              help='Set check interval in seconds')
+@click.option('--threshold', '-t', type=int,
+              help='Set alert threshold')
+@click.pass_context
+def monitor_config(ctx, show, output, enable, disable, interval, threshold):
+    """Manage monitoring configuration."""
+    from .monitoring import MonitoringConfig
+    import json
+    
+    config = MonitoringConfig()
+    
+    # Update configuration
+    for monitor_type in enable:
+        setattr(config, f'enable_{monitor_type}_monitoring', True)
+    
+    for monitor_type in disable:
+        setattr(config, f'enable_{monitor_type}_monitoring', False)
+    
+    if interval:
+        config.check_interval = interval
+    
+    if threshold:
+        config.alert_threshold = threshold
+    
+    if show or output:
+        config_dict = {
+            'check_interval': config.check_interval,
+            'alert_threshold': config.alert_threshold,
+            'enable_git_monitoring': config.enable_git_monitoring,
+            'enable_code_monitoring': config.enable_code_monitoring,
+            'enable_performance_monitoring': config.enable_performance_monitoring,
+            'enable_drift_detection': config.enable_drift_detection
+        }
+        
+        if show:
+            console.print("[blue]Monitoring Configuration[/blue]\n")
+            for key, value in config_dict.items():
+                console.print(f"{key}: [yellow]{value}[/yellow]")
+        
+        if output:
+            with open(output, 'w') as f:
+                json.dump(config_dict, f, indent=2)
+            console.print(f"[green]✓[/green] Configuration saved to {output}")
+
+
+@monitor.command('drift')
+@click.argument('action', type=click.Choice(['check', 'report', 'specs']))
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--file', '-f', type=click.Path(exists=True),
+              help='Check drift for specific file')
+@click.option('--format', type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.option('--severity', '-s', type=click.Choice(['low', 'medium', 'high', 'critical']),
+              help='Filter by severity level')
+@click.pass_context
+def monitor_drift(ctx, action, project, file, format, severity):
+    """Manage drift detection and reporting."""
+    from .monitoring import DriftDetector
+    from pathlib import Path
+    import json
+    
+    project_path = Path(project).resolve()
+    detector = DriftDetector(project_path)
+    
+    if action == 'check':
+        # Run drift check
+        if file:
+            report = detector.check_file_drift(Path(file))
+        else:
+            report = detector.check_drift()
+        
+        # Filter by severity if requested
+        if severity:
+            report.drifts = [d for d in report.drifts if d.severity == severity]
+        
+        if format == 'json':
+            console.print(json.dumps(report.to_dict(), indent=2))
+        else:
+            # Display as table
+            console.print(f"[blue]Drift Report for {project_path}[/blue]\n")
+            
+            if not report.drifts:
+                console.print("[green]No drift detected[/green]")
+                return
+            
+            table = Table(title=f"Found {len(report.drifts)} drift issues")
+            table.add_column("Type", style="cyan")
+            table.add_column("Severity", style="yellow")
+            table.add_column("Description", style="white")
+            table.add_column("Location", style="blue")
+            
+            for drift in report.drifts:
+                severity_color = {
+                    'low': 'green',
+                    'medium': 'yellow',
+                    'high': 'red',
+                    'critical': 'red on white'
+                }.get(drift.severity, 'white')
+                
+                location = str(drift.file_path) if drift.file_path else "-"
+                if drift.line_number:
+                    location += f":{drift.line_number}"
+                
+                table.add_row(
+                    drift.drift_type.value,
+                    f"[{severity_color}]{drift.severity.upper()}[/{severity_color}]",
+                    drift.description[:50] + "..." if len(drift.description) > 50 else drift.description,
+                    location
+                )
+            
+            console.print(table)
+            
+            # Show summary
+            summary = report.to_dict()['summary']
+            console.print(f"\n[cyan]Summary:[/cyan]")
+            console.print(f"Files checked: {report.files_checked}")
+            console.print(f"Specifications checked: {', '.join(report.checked_specs)}")
+            console.print(f"By type: {summary['by_type']}")
+            console.print(f"By severity: {summary['by_severity']}")
+    
+    elif action == 'report':
+        # Generate detailed drift report
+        report = detector.check_drift()
+        
+        if format == 'json':
+            console.print(json.dumps(report.to_dict(), indent=2))
+        else:
+            console.print(f"[blue]Detailed Drift Report[/blue]\n")
+            
+            for drift in report.drifts:
+                console.print(f"[yellow]{drift.drift_type.value.upper()}[/yellow]: {drift.description}")
+                console.print(f"Severity: [{drift.severity}]{drift.severity}[/{drift.severity}]")
+                if drift.file_path:
+                    console.print(f"File: {drift.file_path}:{drift.line_number or ''}")
+                if drift.expected:
+                    console.print(f"Expected: {drift.expected}")
+                if drift.actual:
+                    console.print(f"Actual: {drift.actual}")
+                if drift.spec_reference:
+                    console.print(f"Reference: {drift.spec_reference}")
+                console.print()
+    
+    elif action == 'specs':
+        # Show loaded specifications
+        specs = detector.specifications
+        
+        if format == 'json':
+            console.print(json.dumps({k: bool(v) for k, v in specs.items()}, indent=2))
+        else:
+            console.print("[blue]Loaded Specifications[/blue]\n")
+            
+            for spec_name, spec_data in specs.items():
+                status = "[green]✓[/green]" if spec_data else "[red]✗[/red]"
+                console.print(f"{status} {spec_name}")
+                
+                if spec_data and spec_name == 'velocitytree':
+                    features = spec_data.get('features', {})
+                    console.print(f"    Features defined: {len(features)}")
+                elif spec_data and spec_name == 'openapi':
+                    paths = spec_data.get('paths', {})
+                    console.print(f"    API endpoints: {len(paths)}")
+                elif spec_data and spec_name == 'readme':
+                    console.print(f"    README length: {len(spec_data)} chars")
+                elif spec_data and spec_name == 'architecture':
+                    console.print(f"    Architecture doc found")
+                elif spec_data and spec_name == 'feature_graph':
+                    features = spec_data.get('features', {})
+                    console.print(f"    Features in graph: {len(features)}")
+
+
+@monitor.command('alerts')
+@click.argument('action', type=click.Choice(['list', 'summary', 'test']))
+@click.option('--hours', '-h', type=int, default=24,
+              help='Number of hours to look back')
+@click.option('--severity', '-s', type=click.Choice(['info', 'warning', 'error', 'critical']),
+              help='Filter by severity')
+@click.option('--category', '-c', help='Filter by category')
+@click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.pass_context
+def monitor_alerts(ctx, action, hours, severity, category, format):
+    """Manage monitoring alerts."""
+    from .monitoring import AlertManager, AlertConfig, AlertSeverity
+    from pathlib import Path
+    import json
+    
+    # Create alert manager
+    config = AlertConfig(
+        alert_file=Path.cwd() / '.velocitytree' / 'alerts.json'
+    )
+    manager = AlertManager(config)
+    
+    if action == 'list':
+        # Show recent alerts
+        # Load alerts from file
+        if not config.alert_file.exists():
+            console.print("[yellow]No alerts found[/yellow]")
+            return
+        
+        alerts = []
+        with open(config.alert_file) as f:
+            for line in f:
+                alert_data = json.loads(line)
+                # Filter by time
+                alert_time = datetime.fromisoformat(alert_data['timestamp'])
+                if datetime.now() - alert_time > timedelta(hours=hours):
+                    continue
+                
+                # Filter by severity
+                if severity and alert_data['severity'] != severity:
+                    continue
+                
+                # Filter by category
+                if category and alert_data['category'] != category:
+                    continue
+                
+                alerts.append(alert_data)
+        
+        if format == 'json':
+            console.print(json.dumps(alerts, indent=2))
+        else:
+            if not alerts:
+                console.print("[yellow]No alerts match criteria[/yellow]")
+                return
+            
+            table = Table(title=f"Alerts (last {hours} hours)")
+            table.add_column("Time", style="cyan")
+            table.add_column("Severity", style="yellow")
+            table.add_column("Category", style="blue")
+            table.add_column("Title", style="white")
+            table.add_column("Source", style="green")
+            
+            for alert in sorted(alerts, key=lambda x: x['timestamp'], reverse=True):
+                severity_color = {
+                    'info': 'green',
+                    'warning': 'yellow',
+                    'error': 'red',
+                    'critical': 'red on white'
+                }.get(alert['severity'], 'white')
+                
+                table.add_row(
+                    alert['timestamp'][11:19],  # Just time
+                    f"[{severity_color}]{alert['severity'].upper()}[/{severity_color}]",
+                    alert['category'],
+                    alert['title'][:40] + "..." if len(alert['title']) > 40 else alert['title'],
+                    alert['source']
+                )
+            
+            console.print(table)
+    
+    elif action == 'summary':
+        # Show alert summary
+        summary = manager.get_alert_summary(hours=hours)
+        
+        if format == 'json':
+            console.print(json.dumps(summary, indent=2))
+        else:
+            console.print(f"[blue]Alert Summary (last {hours} hours)[/blue]\n")
+            console.print(f"Total Alerts: [yellow]{summary['total_alerts']}[/yellow]")
+            
+            # By severity
+            console.print("\n[cyan]By Severity:[/cyan]")
+            for sev, count in summary['by_severity'].items():
+                color = {
+                    'info': 'green',
+                    'warning': 'yellow',
+                    'error': 'red',
+                    'critical': 'red on white'
+                }.get(sev, 'white')
+                console.print(f"  [{color}]{sev.upper()}[/{color}]: {count}")
+            
+            # By category
+            console.print("\n[cyan]By Category:[/cyan]")
+            for cat, count in sorted(summary['by_category'].items(), key=lambda x: x[1], reverse=True)[:5]:
+                console.print(f"  {cat}: {count}")
+            
+            # By source
+            console.print("\n[cyan]By Source:[/cyan]")
+            for src, count in sorted(summary['by_source'].items(), key=lambda x: x[1], reverse=True)[:5]:
+                console.print(f"  {src}: {count}")
+    
+    elif action == 'test':
+        # Send test alert
+        test_severity = AlertSeverity.INFO
+        if severity:
+            test_severity = {
+                'info': AlertSeverity.INFO,
+                'warning': AlertSeverity.WARNING,
+                'error': AlertSeverity.ERROR,
+                'critical': AlertSeverity.CRITICAL
+            }[severity]
+        
+        alert = manager.create_alert(
+            severity=test_severity,
+            title="Test Alert",
+            description="This is a test alert from the monitoring system",
+            source="CLI",
+            category=category or "test",
+            details={'triggered_by': 'user', 'command': 'velocitytree monitor alerts test'}
+        )
+        
+        if manager.send_alert(alert):
+            console.print(f"[green]✓[/green] Test alert sent successfully")
+        else:
+            console.print(f"[red]✗[/red] Failed to send test alert (may be rate limited or suppressed)")
+
+
+@monitor.command('alert-config')
+@click.option('--show', is_flag=True, help='Show current alert configuration')
+@click.option('--channel', '-c', multiple=True,
+              type=click.Choice(['log', 'file', 'email', 'webhook', 'console']),
+              help='Enable alert channels')
+@click.option('--email-config', type=click.Path(exists=True),
+              help='Path to email configuration file')
+@click.option('--webhook-url', help='Webhook URL for alerts')
+@click.option('--rate-limit', type=click.Tuple([str, int]),
+              multiple=True, help='Set rate limits (e.g., per_minute 10)')
+@click.option('--output', '-o', type=click.Path(),
+              help='Save configuration to file')
+@click.pass_context
+def monitor_alert_config(ctx, show, channel, email_config, webhook_url, rate_limit, output):
+    """Configure alert system."""
+    from .monitoring import AlertConfig, AlertChannel
+    import json
+    
+    config = AlertConfig()
+    
+    # Update channels
+    if channel:
+        config.enabled_channels = []
+        for ch in channel:
+            config.enabled_channels.append(AlertChannel[ch.upper()])
+    
+    # Load email config
+    if email_config:
+        with open(email_config) as f:
+            config.email_config = json.load(f)
+    
+    # Set webhook URL
+    if webhook_url:
+        config.webhook_config = {'webhook_url': webhook_url}
+    
+    # Set rate limits
+    if rate_limit:
+        for period, limit in rate_limit:
+            config.rate_limits[period] = limit
+    
+    if show or output:
+        config_dict = {
+            'enabled_channels': [ch.value for ch in config.enabled_channels],
+            'rate_limits': config.rate_limits,
+            'severity_thresholds': {k.value: v for k, v in config.severity_thresholds.items()},
+            'suppression_window': config.suppression_window
+        }
+        
+        if config.email_config:
+            config_dict['email_config'] = config.email_config
+        if config.webhook_config:
+            config_dict['webhook_config'] = config.webhook_config
+        
+        if show:
+            console.print("[blue]Alert Configuration[/blue]\n")
+            console.print(json.dumps(config_dict, indent=2))
+        
+        if output:
+            with open(output, 'w') as f:
+                json.dump(config_dict, f, indent=2)
+            console.print(f"[green]✓[/green] Configuration saved to {output}")
+
+
+@monitor.command('realign')
+@click.argument('action', type=click.Choice(['suggest', 'apply', 'export']))
+@click.option('--project', '-p', type=click.Path(exists=True), default='.',
+              help='Project directory (defaults to current directory)')
+@click.option('--drift-file', '-d', type=click.Path(exists=True),
+              help='Path to drift report file')
+@click.option('--suggestion-id', '-s', help='Specific suggestion ID to apply')
+@click.option('--priority', type=click.Choice(['critical', 'high', 'medium', 'low']),
+              help='Filter suggestions by priority')
+@click.option('--type', '-t', type=click.Choice(['code_change', 'file_creation', 'documentation_update', 'configuration_change', 'refactoring']),
+              help='Filter suggestions by type')
+@click.option('--automated-only', is_flag=True, help='Show only automated suggestions')
+@click.option('--interactive', '-i', is_flag=True, help='Interactive mode for applying suggestions')
+@click.option('--output', '-o', type=click.Path(), help='Output file for export')
+@click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.pass_context
+def monitor_realign(ctx, action, project, drift_file, suggestion_id, priority, type, automated_only, interactive, output, format):
+    """Generate and apply realignment suggestions."""
+    from .monitoring import DriftDetector, RealignmentEngine
+    from pathlib import Path
+    import json
+    
+    project_path = Path(project).resolve()
+    
+    if action == 'suggest':
+        # Generate suggestions from drift
+        if drift_file:
+            # Load drift report from file
+            with open(drift_file) as f:
+                drift_data = json.load(f)
+            # TODO: Reconstruct DriftReport from data
+            console.print("[yellow]Loading drift report from file not yet implemented[/yellow]")
+            return
+        else:
+            # Run drift detection
+            console.print("[blue]Running drift detection...[/blue]")
+            detector = DriftDetector(project_path)
+            drift_report = detector.check_drift()
+        
+        # Generate suggestions
+        engine = RealignmentEngine(project_path)
+        plan = engine.generate_suggestions(drift_report)
+        
+        # Filter suggestions
+        filtered_suggestions = plan.suggestions
+        
+        if priority:
+            filtered_suggestions = [s for s in filtered_suggestions if s.priority.value == priority]
+        
+        if type:
+            filtered_suggestions = [s for s in filtered_suggestions if s.suggestion_type.value == type]
+        
+        if automated_only:
+            filtered_suggestions = [s for s in filtered_suggestions if s.automated]
+        
+        if format == 'json':
+            plan.suggestions = filtered_suggestions
+            console.print(json.dumps(plan.to_dict(), indent=2))
+        else:
+            if not filtered_suggestions:
+                console.print("[yellow]No suggestions match criteria[/yellow]")
+                return
+            
+            console.print(f"[blue]Realignment Suggestions for {project_path}[/blue]\n")
+            
+            table = Table(title=f"Found {len(filtered_suggestions)} suggestions")
+            table.add_column("ID", style="cyan", max_width=8)
+            table.add_column("Type", style="yellow")
+            table.add_column("Priority", style="red")
+            table.add_column("Title", style="white")
+            table.add_column("Effort", style="green")
+            table.add_column("Auto", style="blue")
+            
+            for suggestion in filtered_suggestions:
+                priority_color = {
+                    'critical': 'red on white',
+                    'high': 'red',
+                    'medium': 'yellow',
+                    'low': 'green'
+                }.get(suggestion.priority.value, 'white')
+                
+                table.add_row(
+                    suggestion.suggestion_id[:8],
+                    suggestion.suggestion_type.value,
+                    f"[{priority_color}]{suggestion.priority.value.upper()}[/{priority_color}]",
+                    suggestion.title[:50] + "..." if len(suggestion.title) > 50 else suggestion.title,
+                    suggestion.estimated_effort,
+                    "✓" if suggestion.automated else "✗"
+                )
+            
+            console.print(table)
+            
+            # Show summary
+            console.print(f"\n[cyan]Summary:[/cyan]")
+            console.print(f"Total effort: {plan.total_effort}")
+            console.print(f"Automated available: {sum(1 for s in filtered_suggestions if s.automated)}")
+            
+            # Show details for first few suggestions
+            console.print("\n[cyan]Top Suggestions:[/cyan]")
+            for i, suggestion in enumerate(filtered_suggestions[:3]):
+                console.print(f"\n[yellow]{i+1}. {suggestion.title}[/yellow]")
+                console.print(f"   Type: {suggestion.suggestion_type.value}")
+                console.print(f"   Priority: {suggestion.priority.value}")
+                console.print(f"   Description: {suggestion.description}")
+                console.print("   Steps:")
+                for step in suggestion.implementation_steps[:3]:
+                    console.print(f"     - {step}")
+                if len(suggestion.implementation_steps) > 3:
+                    console.print(f"     ... and {len(suggestion.implementation_steps) - 3} more steps")
+    
+    elif action == 'apply':
+        # Apply specific suggestion
+        if not suggestion_id:
+            console.print("[red]Error: --suggestion-id required for apply action[/red]")
+            return
+        
+        # Load suggestions (would need to persist them in practice)
+        console.print("[yellow]Apply functionality requires persistent suggestion storage[/yellow]")
+        console.print("In a real implementation, suggestions would be loaded from storage")
+        
+        # Mock suggestion for demonstration
+        if suggestion_id == "demo":
+            from .monitoring import RealignmentSuggestion, DriftItem, DriftType, SuggestionType, SuggestionPriority
+            
+            mock_suggestion = RealignmentSuggestion(
+                suggestion_id="demo",
+                drift_item=DriftItem(
+                    drift_type=DriftType.CODE_STRUCTURE,
+                    description="Demo drift",
+                    severity="medium"
+                ),
+                suggestion_type=SuggestionType.FILE_CREATION,
+                priority=SuggestionPriority.MEDIUM,
+                title="Create demo file",
+                description="Demo suggestion",
+                implementation_steps=["Create file"],
+                file_changes=[{
+                    'action': 'create',
+                    'path': 'demo.txt',
+                    'content': 'Demo content'
+                }],
+                automated=True
+            )
+            
+            engine = RealignmentEngine(project_path)
+            if engine.apply_suggestion(mock_suggestion):
+                console.print("[green]✓[/green] Suggestion applied successfully")
+            else:
+                console.print("[red]✗[/red] Failed to apply suggestion")
+    
+    elif action == 'export':
+        # Export suggestions to file
+        if not output:
+            console.print("[red]Error: --output required for export action[/red]")
+            return
+        
+        # Generate suggestions
+        detector = DriftDetector(project_path)
+        drift_report = detector.check_drift()
+        
+        engine = RealignmentEngine(project_path)
+        plan = engine.generate_suggestions(drift_report)
+        
+        # Export to file
+        with open(output, 'w') as f:
+            json.dump(plan.to_dict(), f, indent=2)
+        
+        console.print(f"[green]✓[/green] Suggestions exported to {output}")
 
 
 # Register onboarding command
