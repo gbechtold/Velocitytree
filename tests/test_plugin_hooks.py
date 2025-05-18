@@ -1,365 +1,402 @@
-"""Tests for plugin hook integration."""
+"""
+Test plugin lifecycle hooks.
+"""
 
 import pytest
+from unittest.mock import MagicMock, patch
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 from velocitytree.plugin_system import Plugin, PluginManager, HookManager
 from velocitytree.config import Config
 
 
-class HookTestPlugin(Plugin):
-    """Plugin for testing hooks."""
+class MockPlugin(Plugin):
+    """Mock plugin for testing."""
     
-    def __init__(self, config=None):
+    name = "test_plugin"
+    version = "1.0.0"
+    description = "Test plugin for lifecycle hooks"
+    
+    def __init__(self, config):
         super().__init__(config)
-        self.events_received = []
-    
-    @property
-    def name(self) -> str:
-        return "hook_test_plugin"
-    
-    @property
-    def version(self) -> str:
-        return "1.0.0"
+        self.activate_called = False
+        self.hooks_registered = False
     
     def activate(self):
-        """Activate the plugin."""
+        """Called when the plugin is activated."""
         super().activate()
+        self.activate_called = True
     
     def register_hooks(self, hook_manager):
-        """Register hooks for all events."""
-        # Core system hooks
-        hook_manager.register_hook('startup', self.on_startup)
-        hook_manager.register_hook('shutdown', self.on_shutdown)
-        hook_manager.register_hook('error', self.on_error)
-        
-        # Plugin lifecycle hooks
-        hook_manager.register_hook('plugin_loaded', self.on_plugin_loaded)
-        hook_manager.register_hook('plugin_activated', self.on_plugin_activated)
-        hook_manager.register_hook('plugin_deactivated', self.on_plugin_deactivated)
-        
-        # Command lifecycle hooks
-        hook_manager.register_hook('before_command', self.on_before_command)
-        hook_manager.register_hook('after_command', self.on_after_command)
-        
-        # Project operation hooks
-        hook_manager.register_hook('init_complete', self.on_init_complete)
-        hook_manager.register_hook('flatten_complete', self.on_flatten_complete)
-        
-        # Workflow hooks
-        hook_manager.register_hook('workflow_start', self.on_workflow_start)
-        hook_manager.register_hook('workflow_complete', self.on_workflow_complete)
+        """Register hooks for this plugin."""
+        self.hooks_registered = True
+        hook_manager.register_hook('test_event', self.test_hook)
     
-    def on_startup(self, **kwargs):
-        self.events_received.append(('startup', kwargs))
-    
-    def on_shutdown(self, **kwargs):
-        self.events_received.append(('shutdown', kwargs))
-    
-    def on_error(self, error, **kwargs):
-        self.events_received.append(('error', {'error': error, **kwargs}))
-    
-    def on_plugin_loaded(self, plugin_name, **kwargs):
-        self.events_received.append(('plugin_loaded', {'plugin_name': plugin_name, **kwargs}))
-    
-    def on_plugin_activated(self, plugin_name, **kwargs):
-        self.events_received.append(('plugin_activated', {'plugin_name': plugin_name, **kwargs}))
-    
-    def on_plugin_deactivated(self, plugin_name, **kwargs):
-        self.events_received.append(('plugin_deactivated', {'plugin_name': plugin_name, **kwargs}))
-    
-    def on_before_command(self, command_name, **kwargs):
-        self.events_received.append(('before_command', {'command_name': command_name, **kwargs}))
-    
-    def on_after_command(self, command_name, result, **kwargs):
-        self.events_received.append(('after_command', {'command_name': command_name, 'result': result, **kwargs}))
-    
-    def on_init_complete(self, project_path, **kwargs):
-        self.events_received.append(('init_complete', {'project_path': project_path, **kwargs}))
-    
-    def on_flatten_complete(self, output_path, context, **kwargs):
-        self.events_received.append(('flatten_complete', {'output_path': output_path, 'context': context, **kwargs}))
-    
-    def on_workflow_start(self, workflow_name, **kwargs):
-        self.events_received.append(('workflow_start', {'workflow_name': workflow_name, **kwargs}))
-    
-    def on_workflow_complete(self, workflow_name, result, **kwargs):
-        self.events_received.append(('workflow_complete', {'workflow_name': workflow_name, 'result': result, **kwargs}))
+    def test_hook(self, *args):
+        """Test hook callback."""
+        return "test_hook_result"
 
 
-class TestPluginHooks:
-    """Test plugin hook system."""
+class TestHookManager:
+    """Test HookManager functionality."""
     
-    def setup_method(self):
-        """Setup for each test."""
-        self.config = Config()
-        self.plugin_manager = PluginManager(self.config)
-        self.plugin = HookTestPlugin(self.config)
-        self.plugin_manager.plugins['hook_test_plugin'] = self.plugin
-        self.plugin_manager.activate_plugin('hook_test_plugin')
-        # Register hooks
-        self.plugin.register_hooks(self.plugin_manager.hook_manager)
+    def test_lifecycle_hook_definitions(self):
+        """Test that lifecycle hooks are properly defined."""
+        hook_manager = HookManager()
+        
+        # Check core lifecycle hooks
+        assert 'velocitytree_startup' in hook_manager.hook_metadata
+        assert 'velocitytree_shutdown' in hook_manager.hook_metadata
+        
+        # Check plugin lifecycle hooks
+        assert 'plugin_activated' in hook_manager.hook_metadata
+        assert 'plugin_deactivated' in hook_manager.hook_metadata
+        assert 'plugin_loaded' in hook_manager.hook_metadata
+        
+        # Check workflow lifecycle hooks
+        assert 'workflow_start' in hook_manager.hook_metadata
+        assert 'workflow_step' in hook_manager.hook_metadata
+        assert 'workflow_complete' in hook_manager.hook_metadata
+        assert 'workflow_error' in hook_manager.hook_metadata
+        
+        # Check file operation hooks
+        assert 'before_flatten' in hook_manager.hook_metadata
+        assert 'after_flatten' in hook_manager.hook_metadata
+        
+        # Check monitoring hooks
+        assert 'drift_detected' in hook_manager.hook_metadata
+        assert 'alert_created' in hook_manager.hook_metadata
+        
+        # Check AI hooks
+        assert 'before_ai_request' in hook_manager.hook_metadata
+        assert 'after_ai_response' in hook_manager.hook_metadata
     
-    def test_startup_shutdown_hooks(self):
-        """Test startup and shutdown hooks."""
-        # Trigger startup
-        self.plugin_manager.hook_manager.trigger_hook('startup')
+    def test_hook_priority(self):
+        """Test hook priority execution order."""
+        hook_manager = HookManager()
+        execution_order = []
         
-        # Trigger shutdown
-        self.plugin_manager.hook_manager.trigger_hook('shutdown')
+        def hook1():
+            execution_order.append('hook1')
         
-        # Check events
-        events = [event[0] for event in self.plugin.events_received]
-        assert 'startup' in events
-        assert 'shutdown' in events
+        def hook2():
+            execution_order.append('hook2')
+        
+        def hook3():
+            execution_order.append('hook3')
+        
+        # Register hooks with different priorities
+        hook_manager.register_hook('test_event', hook2, priority=50)
+        hook_manager.register_hook('test_event', hook1, priority=10)  # Should run first
+        hook_manager.register_hook('test_event', hook3, priority=90)  # Should run last
+        
+        hook_manager.trigger_hook('test_event')
+        
+        assert execution_order == ['hook1', 'hook2', 'hook3']
     
-    def test_error_hook(self):
-        """Test error handling hook."""
-        error = Exception("Test error")
-        self.plugin_manager.hook_manager.trigger_hook('error', error=error, context="test_context")
+    def test_hook_unregister(self):
+        """Test unregistering hooks."""
+        hook_manager = HookManager()
         
-        # Check error was received
-        error_events = [e for e in self.plugin.events_received if e[0] == 'error']
-        assert len(error_events) == 1
-        assert error_events[0][1]['error'] == error
-        assert error_events[0][1]['context'] == "test_context"
+        def test_hook():
+            return "result"
+        
+        hook_manager.register_hook('test_event', test_hook)
+        assert len(hook_manager.hooks.get('test_event', [])) == 1
+        
+        hook_manager.unregister_hook('test_event', test_hook)
+        assert len(hook_manager.hooks.get('test_event', [])) == 0
     
-    def test_plugin_lifecycle_hooks(self):
-        """Test plugin lifecycle hooks."""
-        # Trigger plugin loaded
-        self.plugin_manager.hook_manager.trigger_hook('plugin_loaded', plugin_name='test_plugin')
+    def test_hook_error_handling(self):
+        """Test hook error handling."""
+        hook_manager = HookManager()
         
-        # Trigger plugin activated
-        self.plugin_manager.hook_manager.trigger_hook('plugin_activated', plugin_name='test_plugin')
+        def failing_hook():
+            raise Exception("Hook failed")
         
-        # Trigger plugin deactivated
-        self.plugin_manager.hook_manager.trigger_hook('plugin_deactivated', plugin_name='test_plugin')
+        def working_hook():
+            return "success"
         
-        # Check events
-        events = {event[0]: event[1] for event in self.plugin.events_received}
+        hook_manager.register_hook('test_event', failing_hook)
+        hook_manager.register_hook('test_event', working_hook)
         
-        assert 'plugin_loaded' in events
-        assert events['plugin_loaded']['plugin_name'] == 'test_plugin'
+        results = hook_manager.trigger_hook('test_event')
         
-        assert 'plugin_activated' in events
-        assert events['plugin_activated']['plugin_name'] == 'test_plugin'
-        
-        assert 'plugin_deactivated' in events
-        assert events['plugin_deactivated']['plugin_name'] == 'test_plugin'
+        # Should still get result from working hook
+        assert "success" in results
     
-    def test_command_hooks(self):
-        """Test command lifecycle hooks."""
-        # Trigger before command
-        self.plugin_manager.hook_manager.trigger_hook('before_command', command_name='flatten')
+    def test_list_hooks(self):
+        """Test listing registered hooks."""
+        hook_manager = HookManager()
         
-        # Trigger after command
-        self.plugin_manager.hook_manager.trigger_hook('after_command', command_name='flatten', result={'status': 'success'})
+        def test_hook():
+            pass
         
-        # Check events
-        events = {event[0]: event[1] for event in self.plugin.events_received}
+        hook_manager.register_hook('test_event', test_hook, priority=25)
         
-        assert 'before_command' in events
-        assert events['before_command']['command_name'] == 'flatten'
+        hooks_info = hook_manager.list_hooks()
         
-        assert 'after_command' in events
-        assert events['after_command']['command_name'] == 'flatten'
-        assert events['after_command']['result']['status'] == 'success'
+        assert 'test_event' in hooks_info
+        assert hooks_info['test_event']['callbacks'][0]['name'] == 'test_hook'
+        assert hooks_info['test_event']['callbacks'][0]['priority'] == 25
+
+
+class TestPluginManagerHooks:
+    """Test PluginManager hook integration."""
     
-    def test_project_operation_hooks(self):
-        """Test project operation hooks."""
-        # Trigger init complete
-        self.plugin_manager.hook_manager.trigger_hook('init_complete', project_path='/test/project')
+    @patch('velocitytree.plugin_system.PluginManager._auto_load_plugins')
+    def test_plugin_loaded_hook(self, mock_auto_load):
+        """Test plugin_loaded hook is triggered."""
+        config = MagicMock(spec=Config)
+        config.config_data = {}
+        plugin_manager = PluginManager(config)
         
-        # Trigger flatten complete
-        self.plugin_manager.hook_manager.trigger_hook('flatten_complete', 
-                                                     output_path='/test/output',
-                                                     context={'files': 10})
+        # Mock hook trigger to track calls
+        plugin_manager.trigger_hook = MagicMock()
         
-        # Check events
-        events = {event[0]: event[1] for event in self.plugin.events_received}
+        # Create and load a mock plugin
+        plugin = MockPlugin(config)
+        plugin_manager.plugins['test_plugin'] = plugin
         
-        assert 'init_complete' in events
-        assert events['init_complete']['project_path'] == '/test/project'
+        # Activate plugin (which should trigger hooks)
+        plugin_manager.activate_plugin('test_plugin')
         
-        assert 'flatten_complete' in events
-        assert events['flatten_complete']['output_path'] == '/test/output'
-        assert events['flatten_complete']['context']['files'] == 10
+        # Check that hooks were triggered
+        assert plugin_manager.trigger_hook.call_count >= 1
+        
+        # Find the plugin_activated call
+        activated_calls = [call for call in plugin_manager.trigger_hook.call_args_list 
+                          if call[0][0] == 'plugin_activated']
+        assert len(activated_calls) == 1
+        assert activated_calls[0][0][1] == 'test_plugin'
     
+    @patch('velocitytree.plugin_system.PluginManager._auto_load_plugins')
+    def test_plugin_deactivated_hook(self, mock_auto_load):
+        """Test plugin_deactivated hook is triggered."""
+        config = MagicMock(spec=Config)
+        config.config_data = {}
+        plugin_manager = PluginManager(config)
+        
+        # Mock hook trigger to track calls
+        plugin_manager.trigger_hook = MagicMock()
+        
+        # Create and load a mock plugin
+        plugin = MockPlugin(config)
+        plugin.is_active = True
+        plugin_manager.plugins['test_plugin'] = plugin
+        
+        # Deactivate plugin
+        plugin_manager.deactivate_plugin('test_plugin')
+        
+        # Check that deactivated hook was triggered
+        plugin_manager.trigger_hook.assert_called_with('plugin_deactivated', 'test_plugin')
+    
+    @patch('velocitytree.plugin_system.PluginManager._auto_load_plugins')
+    def test_plugin_hooks_registration(self, mock_auto_load):
+        """Test that plugin hooks are registered on activation."""
+        config = MagicMock(spec=Config)
+        config.config_data = {}
+        plugin_manager = PluginManager(config)
+        
+        # Create and load a mock plugin
+        plugin = MockPlugin(config)
+        plugin_manager.plugins['test_plugin'] = plugin
+        
+        # Activate plugin
+        plugin_manager.activate_plugin('test_plugin')
+        
+        # Check that plugin's register_hooks was called
+        assert plugin.hooks_registered
+
+
+class TestWorkflowHooks:
+    """Test workflow lifecycle hooks."""
+    
+    @pytest.mark.skipif(
+        not Path(__file__).parent.parent.joinpath('velocitytree', 'workflows.py').exists(),
+        reason="Workflows module not available"
+    )
     def test_workflow_hooks(self):
-        """Test workflow hooks."""
-        # Trigger workflow start
-        self.plugin_manager.hook_manager.trigger_hook('workflow_start', workflow_name='test_workflow')
+        """Test workflow lifecycle hooks are triggered."""
+        from velocitytree.workflows import Workflow, WorkflowStep
+        from velocitytree.workflow_context import WorkflowContext
         
-        # Trigger workflow complete
-        self.plugin_manager.hook_manager.trigger_hook('workflow_complete', 
-                                                     workflow_name='test_workflow',
-                                                     result={'status': 'completed'})
+        # Create a simple workflow
+        workflow_config = {
+            'description': 'Test workflow',
+            'steps': [
+                {
+                    'name': 'Test Step',
+                    'type': 'command',
+                    'command': 'echo "test"'
+                }
+            ]
+        }
         
-        # Check events
-        events = {event[0]: event[1] for event in self.plugin.events_received}
+        workflow = Workflow('test_workflow', workflow_config)
+        context = WorkflowContext()
         
-        assert 'workflow_start' in events
-        assert events['workflow_start']['workflow_name'] == 'test_workflow'
-        
-        assert 'workflow_complete' in events
-        assert events['workflow_complete']['workflow_name'] == 'test_workflow'
-        assert events['workflow_complete']['result']['status'] == 'completed'
-    
-    def test_hook_execution_order(self):
-        """Test hook execution order with multiple plugins."""
-        # Create second plugin
-        plugin2 = HookTestPlugin(self.config)
-        plugin2._name = "hook_test_plugin_2"
-        
-        self.plugin_manager.plugins['hook_test_plugin_2'] = plugin2
-        self.plugin_manager.activate_plugin('hook_test_plugin_2')
-        plugin2.register_hooks(self.plugin_manager.hook_manager)
-        
-        # Clear previous events
-        self.plugin.events_received.clear()
-        plugin2.events_received.clear()
-        
-        # Trigger a hook
-        self.plugin_manager.hook_manager.trigger_hook('startup')
-        
-        # Both plugins should receive the event
-        assert len(self.plugin.events_received) == 1
-        assert len(plugin2.events_received) == 1
-        assert self.plugin.events_received[0][0] == 'startup'
-        assert plugin2.events_received[0][0] == 'startup'
-    
-    def test_hook_return_values(self):
-        """Test collecting return values from hooks."""
-        # Create plugin that returns values
-        class ReturningPlugin(Plugin):
-            @property
-            def name(self):
-                return "returning_plugin"
+        # Mock the plugin manager to track hook calls
+        with patch('velocitytree.workflows.PluginManager') as mock_plugin_manager:
+            mock_instance = mock_plugin_manager.return_value
+            mock_instance.trigger_hook = MagicMock()
             
-            @property
-            def version(self):
-                return "1.0.0"
+            # Execute workflow
+            workflow.execute(context)
             
-            def activate(self):
-                super().activate()
-            
-            def register_hooks(self, hook_manager):
-                hook_manager.register_hook('process_data', self.process)
-            
-            def process(self, data, **kwargs):
-                return f"Processed: {data}"
-        
-        plugin = ReturningPlugin(self.config)
-        self.plugin_manager.plugins['returning_plugin'] = plugin
-        self.plugin_manager.activate_plugin('returning_plugin')
-        plugin.register_hooks(self.plugin_manager.hook_manager)
-        
-        # Trigger hook and collect results
-        results = self.plugin_manager.hook_manager.trigger_hook('process_data', data="test_data")
-        
-        assert "Processed: test_data" in results
-    
-    def test_hook_error_isolation(self):
-        """Test that errors in one hook don't affect others."""
-        # Create plugin that fails
-        class FailingPlugin(Plugin):
-            @property
-            def name(self):
-                return "failing_plugin"
-            
-            @property
-            def version(self):
-                return "1.0.0"
-            
-            def activate(self):
-                super().activate()
-            
-            def register_hooks(self, hook_manager):
-                hook_manager.register_hook('test_event', self.fail)
-            
-            def fail(self, **kwargs):
-                raise Exception("Hook failed!")
-        
-        failing_plugin = FailingPlugin(self.config)
-        self.plugin_manager.plugins['failing_plugin'] = failing_plugin
-        self.plugin_manager.activate_plugin('failing_plugin')
-        failing_plugin.register_hooks(self.plugin_manager.hook_manager)
-        
-        # Clear events
-        self.plugin.events_received.clear()
-        
-        # Register test event handler in our test plugin
-        def handle_test_event(**kwargs):
-            self.plugin.events_received.append(('test_event', kwargs))
-        
-        self.plugin_manager.hook_manager.register_hook('test_event', handle_test_event)
-        
-        # Trigger event - should handle error in failing plugin
-        self.plugin_manager.hook_manager.trigger_hook('test_event')
-        
-        # Our plugin should still receive the event
-        assert len(self.plugin.events_received) == 1
-        assert self.plugin.events_received[0][0] == 'test_event'
+            # Check that workflow_start hook was triggered
+            mock_instance.trigger_hook.assert_any_call('workflow_start', 'test_workflow', context)
 
 
 class TestHookIntegration:
-    """Integration tests for hook system with actual commands."""
+    """Test hook integration with various components."""
     
-    def test_cli_hook_integration(self, tmp_path):
-        """Test hooks triggered by CLI commands."""
-        # This test demonstrates how hooks would be integrated with CLI
-        # Since the actual CLI imports are done locally within functions,
-        # we'll test the behavior directly instead of mocking imports
+    def test_hook_metadata_access(self):
+        """Test accessing hook metadata."""
+        hook_manager = HookManager()
         
-        config = Config()
+        metadata = hook_manager.get_hook_metadata('workflow_start')
+        
+        assert metadata['description'] == 'Triggered when a workflow starts'
+        assert metadata['args'] == ['workflow_name', 'context']
+        assert metadata['return'] is None
+    
+    def test_hook_return_values(self):
+        """Test hooks that return values."""
+        hook_manager = HookManager()
+        
+        def modify_prompt(prompt, context, system_prompt):
+            return f"Modified: {prompt}"
+        
+        hook_manager.register_hook('before_ai_request', modify_prompt)
+        
+        results = hook_manager.trigger_hook('before_ai_request', 'test prompt', {}, 'system')
+        
+        assert results[0] == "Modified: test prompt"
+    
+    def test_multiple_hook_results(self):
+        """Test aggregating results from multiple hooks."""
+        hook_manager = HookManager()
+        
+        def hook1(*args):
+            return "result1"
+        
+        def hook2(*args):
+            return "result2"
+        
+        hook_manager.register_hook('test_event', hook1)
+        hook_manager.register_hook('test_event', hook2)
+        
+        results = hook_manager.trigger_hook('test_event')
+        
+        assert len(results) == 2
+        assert "result1" in results
+        assert "result2" in results
+
+
+class TestModuleHooks:
+    """Test hooks in different modules."""
+    
+    @patch('velocitytree.plugin_system.PluginManager._auto_load_plugins')
+    def test_ai_hooks(self, mock_auto_load):
+        """Test AI integration hooks."""
+        config = MagicMock(spec=Config)
+        config.config_data = {}
         plugin_manager = PluginManager(config)
         
-        # Add test plugin
-        plugin = HookTestPlugin(config)
-        plugin_manager.plugins['hook_test_plugin'] = plugin
-        plugin_manager.activate_plugin('hook_test_plugin')
-        plugin.register_hooks(plugin_manager.hook_manager)
+        # Track hook calls
+        ai_requests = []
+        ai_responses = []
         
-        # Simulate CLI lifecycle
-        plugin_manager.hook_manager.trigger_hook('before_command', command_name='init')
-        plugin_manager.hook_manager.trigger_hook('init_complete', project_path=str(tmp_path))
-        plugin_manager.hook_manager.trigger_hook('after_command', command_name='init', result={'status': 'success'})
+        def before_ai(prompt, context, system_prompt):
+            ai_requests.append((prompt, context, system_prompt))
+            return f"Modified: {prompt}"
         
-        # Check hooks were triggered
-        events = {event[0]: event[1] for event in plugin.events_received}
-        assert 'before_command' in events
-        assert events['before_command']['command_name'] == 'init'
-        assert 'init_complete' in events
-        assert 'after_command' in events
+        def after_ai(response, prompt):
+            ai_responses.append((response, prompt))
+            return response
+        
+        plugin_manager.hook_manager.register_hook('before_ai_request', before_ai)
+        plugin_manager.hook_manager.register_hook('after_ai_response', after_ai)
+        
+        # Simulate AI request
+        results = plugin_manager.trigger_hook('before_ai_request', 'test prompt', {}, 'system')
+        assert results[0] == "Modified: test prompt"
+        
+        # Simulate AI response
+        plugin_manager.trigger_hook('after_ai_response', 'AI response', 'test prompt')
+        
+        assert len(ai_requests) == 1
+        assert len(ai_responses) == 1
+    
+    @patch('velocitytree.plugin_system.PluginManager._auto_load_plugins')
+    def test_monitoring_hooks(self, mock_auto_load):
+        """Test monitoring system hooks."""
+        config = MagicMock(spec=Config)
+        config.config_data = {}
+        plugin_manager = PluginManager(config)
+        
+        # Track drift and alerts
+        drifts = []
+        alerts = []
+        
+        def on_drift(drift_info, project_path):
+            drifts.append((drift_info, project_path))
+        
+        def on_alert(alert_data, channel):
+            alerts.append((alert_data, channel))
+        
+        plugin_manager.hook_manager.register_hook('drift_detected', on_drift)
+        plugin_manager.hook_manager.register_hook('alert_created', on_alert)
+        
+        # Simulate drift detection
+        drift_info = {'type': 'spec_mismatch', 'severity': 'high'}
+        plugin_manager.trigger_hook('drift_detected', drift_info, '/project')
+        
+        # Simulate alert creation
+        alert_data = {'message': 'Drift detected', 'severity': 'high'}
+        plugin_manager.trigger_hook('alert_created', alert_data, 'email')
+        
+        assert len(drifts) == 1
+        assert drifts[0][0]['type'] == 'spec_mismatch'
+        
+        assert len(alerts) == 1
+        assert alerts[0][0]['message'] == 'Drift detected'
+        assert alerts[0][1] == 'email'
+
+
+class TestHookDocumentation:
+    """Test hook documentation and metadata."""
+    
+    def test_all_hooks_documented(self):
+        """Test that all hooks have proper documentation."""
+        hook_manager = HookManager()
+        
+        for hook_name, metadata in hook_manager.hook_metadata.items():
+            assert 'description' in metadata, f"Hook {hook_name} missing description"
+            assert 'args' in metadata, f"Hook {hook_name} missing args"
+            assert 'return' in metadata, f"Hook {hook_name} missing return info"
             
-    def test_workflow_hook_integration(self):
-        """Test hooks triggered by workflow execution."""
-        # This test demonstrates how hooks would be integrated with workflows
-        # Since WorkflowExecutor would be the one triggering hooks,
-        # we'll simulate the behavior here
+            # Check description is meaningful
+            assert len(metadata['description']) > 10, f"Hook {hook_name} has too short description"
+            
+            # Check args is a list
+            assert isinstance(metadata['args'], list), f"Hook {hook_name} args should be a list"
+    
+    def test_hook_categories(self):
+        """Test that hooks are properly categorized."""
+        hook_manager = HookManager()
         
-        config = Config()
-        plugin_manager = PluginManager(config)
+        # Define expected categories and their hooks
+        expected_categories = {
+            'core': ['velocitytree_startup', 'velocitytree_shutdown'],
+            'plugin': ['plugin_activated', 'plugin_deactivated', 'plugin_loaded'],
+            'workflow': ['workflow_start', 'workflow_step', 'workflow_complete', 'workflow_error'],
+            'ai': ['before_ai_request', 'after_ai_response', 'ai_suggestion_generated'],
+            'monitoring': ['drift_detected', 'alert_created', 'analysis_complete']
+        }
         
-        # Add test plugin
-        plugin = HookTestPlugin(config)
-        plugin_manager.plugins['hook_test_plugin'] = plugin
-        plugin_manager.activate_plugin('hook_test_plugin')
-        plugin.register_hooks(plugin_manager.hook_manager)
-        
-        # Simulate workflow execution with hooks
-        plugin_manager.hook_manager.trigger_hook('workflow_start', workflow_name='test_workflow')
-        # Simulate workflow execution...
-        result = {'status': 'success', 'steps_completed': 5}
-        plugin_manager.hook_manager.trigger_hook('workflow_complete', 
-                                                workflow_name='test_workflow',
-                                                result=result)
-        
-        # Check hooks were triggered
-        events = {event[0]: event[1] for event in plugin.events_received}
-        assert 'workflow_start' in events
-        assert events['workflow_start']['workflow_name'] == 'test_workflow'
-        assert 'workflow_complete' in events
-        assert events['workflow_complete']['workflow_name'] == 'test_workflow'
-        assert events['workflow_complete']['result']['status'] == 'success'
+        # Check that all expected hooks exist
+        for category, hooks in expected_categories.items():
+            for hook in hooks:
+                assert hook in hook_manager.hook_metadata, f"Expected hook {hook} in {category} category"

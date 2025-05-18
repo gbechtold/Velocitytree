@@ -245,6 +245,13 @@ class Workflow:
         for key, value in self.env.items():
             context.set_global_var(key, value)
         
+        # Trigger workflow_start hook
+        from .plugin_system import PluginManager
+        from .config import Config
+        config = Config()
+        plugin_manager = PluginManager(config)
+        plugin_manager.trigger_hook('workflow_start', self.name, context)
+        
         results = []
         error_occurred = False
         

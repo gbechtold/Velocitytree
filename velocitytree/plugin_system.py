@@ -77,36 +77,193 @@ class HookManager:
     """Manages plugin hooks and events."""
     
     def __init__(self):
-        self.hooks: Dict[str, List[Callable]] = {}
+        self.hooks: Dict[str, List[Tuple[Callable, int]]] = {}
+        self.hook_metadata: Dict[str, Dict[str, Any]] = {}
+        self._define_lifecycle_hooks()
     
-    def register_hook(self, event: str, callback: Callable):
-        """Register a hook for an event."""
+    def _define_lifecycle_hooks(self):
+        """Define standard lifecycle hooks."""
+        lifecycle_hooks = {
+            # Core lifecycle events
+            'velocitytree_startup': {
+                'description': 'Triggered when Velocitytree starts',
+                'args': ['config'],
+                'return': None
+            },
+            'velocitytree_shutdown': {
+                'description': 'Triggered when Velocitytree shuts down',
+                'args': [],
+                'return': None
+            },
+            
+            # Plugin lifecycle events
+            'plugin_activated': {
+                'description': 'Triggered when a plugin is activated',
+                'args': ['plugin_name'],
+                'return': None
+            },
+            'plugin_deactivated': {
+                'description': 'Triggered when a plugin is deactivated',
+                'args': ['plugin_name'],
+                'return': None
+            },
+            'plugin_loaded': {
+                'description': 'Triggered when a plugin is loaded',
+                'args': ['plugin_name', 'plugin_instance'],
+                'return': None
+            },
+            
+            # Command lifecycle events
+            'before_command': {
+                'description': 'Triggered before a CLI command is executed',
+                'args': ['command_name', 'args', 'kwargs'],
+                'return': 'modified_args'
+            },
+            'after_command': {
+                'description': 'Triggered after a CLI command is executed',
+                'args': ['command_name', 'result'],
+                'return': 'modified_result'
+            },
+            
+            # Workflow lifecycle events
+            'workflow_start': {
+                'description': 'Triggered when a workflow starts',
+                'args': ['workflow_name', 'context'],
+                'return': None
+            },
+            'workflow_step': {
+                'description': 'Triggered before each workflow step',
+                'args': ['workflow_name', 'step_name', 'context'],
+                'return': 'skip_step'
+            },
+            'workflow_complete': {
+                'description': 'Triggered when a workflow completes',
+                'args': ['workflow_name', 'result', 'context'],
+                'return': None
+            },
+            'workflow_error': {
+                'description': 'Triggered when a workflow encounters an error',
+                'args': ['workflow_name', 'error', 'context'],
+                'return': None
+            },
+            
+            # File operation events
+            'before_flatten': {
+                'description': 'Triggered before flattening operation',
+                'args': ['directory', 'options'],
+                'return': 'modified_options'
+            },
+            'after_flatten': {
+                'description': 'Triggered after flattening operation',
+                'args': ['result'],
+                'return': None
+            },
+            'before_context_generation': {
+                'description': 'Triggered before context generation',
+                'args': ['files', 'options'],
+                'return': 'modified_options'
+            },
+            'after_context_generation': {
+                'description': 'Triggered after context generation',
+                'args': ['context'],
+                'return': 'modified_context'
+            },
+            
+            # Monitoring and analysis events
+            'drift_detected': {
+                'description': 'Triggered when code drift is detected',
+                'args': ['drift_info', 'project_path'],
+                'return': None
+            },
+            'alert_created': {
+                'description': 'Triggered when an alert is created',
+                'args': ['alert_data', 'channel'],
+                'return': None
+            },
+            'analysis_complete': {
+                'description': 'Triggered when code analysis completes',
+                'args': ['analysis_results', 'project_path'],
+                'return': None
+            },
+            
+            # AI integration events
+            'before_ai_request': {
+                'description': 'Triggered before AI request',
+                'args': ['prompt', 'context', 'system_prompt'],
+                'return': 'modified_prompt'
+            },
+            'after_ai_response': {
+                'description': 'Triggered after AI response',
+                'args': ['response', 'prompt'],
+                'return': 'modified_response'
+            },
+            'ai_suggestion_generated': {
+                'description': 'Triggered when AI generates a suggestion',
+                'args': ['suggestion', 'context'],
+                'return': None
+            }
+        }
+        
+        # Store metadata for each hook
+        for event, metadata in lifecycle_hooks.items():
+            self.hook_metadata[event] = metadata
+    
+    def register_hook(self, event: str, callback: Callable, priority: int = 50):
+        """Register a hook for an event with priority (0-100, lower runs first)."""
         if event not in self.hooks:
             self.hooks[event] = []
         
-        self.hooks[event].append(callback)
-        logger.debug(f"Registered hook for event '{event}': {callback.__name__}")
+        # Add callback with priority
+        self.hooks[event].append((callback, priority))
+        
+        # Sort by priority
+        self.hooks[event].sort(key=lambda x: x[1])
+        
+        logger.debug(f"Registered hook for event '{event}': {callback.__name__} (priority: {priority})")
+    
+    def unregister_hook(self, event: str, callback: Callable):
+        """Unregister a hook for an event."""
+        if event in self.hooks:
+            self.hooks[event] = [(cb, p) for cb, p in self.hooks[event] if cb != callback]
+            logger.debug(f"Unregistered hook for event '{event}': {callback.__name__}")
     
     def trigger_hook(self, event: str, *args, **kwargs) -> List[Any]:
-        """Trigger all hooks for an event."""
+        """Trigger all hooks for an event in priority order."""
         results = []
         
         if event in self.hooks:
-            for callback in self.hooks[event]:
+            for callback, priority in self.hooks[event]:
                 try:
                     result = callback(*args, **kwargs)
                     results.append(result)
+                    logger.debug(f"Executed hook {callback.__name__} for event '{event}'")
                 except Exception as e:
                     logger.error(f"Error in hook {callback.__name__} for event '{event}': {e}")
         
         return results
     
-    def list_hooks(self) -> Dict[str, List[str]]:
-        """List all registered hooks."""
-        return {
-            event: [callback.__name__ for callback in callbacks]
-            for event, callbacks in self.hooks.items()
-        }
+    def list_hooks(self) -> Dict[str, List[Dict[str, Any]]]:
+        """List all registered hooks with metadata."""
+        hooks_info = {}
+        
+        for event, callbacks in self.hooks.items():
+            hooks_info[event] = {
+                'metadata': self.hook_metadata.get(event, {}),
+                'callbacks': [
+                    {
+                        'name': callback.__name__,
+                        'priority': priority,
+                        'module': callback.__module__
+                    }
+                    for callback, priority in callbacks
+                ]
+            }
+        
+        return hooks_info
+    
+    def get_hook_metadata(self, event: str) -> Dict[str, Any]:
+        """Get metadata for a specific hook event."""
+        return self.hook_metadata.get(event, {})
 
 
 class PluginManager:
@@ -489,13 +646,20 @@ class PluginManager:
         
         if not plugin:
             plugin = self.load_plugin(plugin_name)
+            if plugin:
+                # Trigger plugin_loaded hook
+                self.trigger_hook('plugin_loaded', plugin_name, plugin)
             
         if not plugin:
             return False
         
         try:
             plugin.activate()
+            plugin.register_hooks(self.hook_manager)  # Register plugin hooks
             logger.info(f"Activated plugin: {plugin_name}")
+            
+            # Trigger plugin_activated hook
+            self.trigger_hook('plugin_activated', plugin_name)
             return True
         except Exception as e:
             logger.error(f"Error activating plugin {plugin_name}: {e}")
@@ -512,6 +676,9 @@ class PluginManager:
         try:
             plugin.deactivate()
             logger.info(f"Deactivated plugin: {plugin_name}")
+            
+            # Trigger plugin_deactivated hook
+            self.trigger_hook('plugin_deactivated', plugin_name)
             return True
         except Exception as e:
             logger.error(f"Error deactivating plugin {plugin_name}: {e}")

@@ -1,0 +1,38 @@
+name: lifecycle_demo
+version: 1.0.0
+description: Demonstrates Velocitytree plugin lifecycle hooks
+author: Velocitytree Team
+class: LifecycleDemoPlugin
+
+configuration:
+  enabled: true
+  log_level: INFO
+  
+features:
+  - Core lifecycle monitoring
+  - Command execution tracking
+  - Workflow performance metrics
+  - AI request monitoring
+  - Drift detection alerts
+
+hooks:
+  - velocitytree_startup
+  - velocitytree_shutdown
+  - plugin_activated
+  - plugin_deactivated
+  - before_command
+  - after_command
+  - workflow_start
+  - workflow_step
+  - workflow_complete
+  - workflow_error
+  - before_flatten
+  - after_flatten
+  - before_ai_request
+  - after_ai_response
+  - drift_detected
+  - alert_created
+
+commands:
+  - lifecycle stats: Show plugin statistics
+  - lifecycle hooks: List all registered hooks
