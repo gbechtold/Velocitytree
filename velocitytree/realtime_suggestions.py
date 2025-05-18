@@ -191,14 +191,24 @@ class RealTimeSuggestionEngine:
     def __init__(
         self,
         analyzer: Optional[CodeAnalyzer] = None,
-        quality_checker: Optional[DocQualityChecker] = None
+        quality_checker: Optional[DocQualityChecker] = None,
+        refactoring_engine: Optional[Any] = None
     ):
         self.analyzer = analyzer or CodeAnalyzer()
         self.quality_checker = quality_checker or DocQualityChecker()
+        self._refactoring_engine = refactoring_engine
         self.prioritizer = SuggestionPrioritizer(self.analyzer)
         self.cache: Dict[Path, Tuple[str, List[CodeSuggestion]]] = {}
         self.debounce_timers: Dict[Path, asyncio.Task] = {}
         self.debounce_delay = 0.5  # seconds
+    
+    @property
+    def refactoring_engine(self):
+        """Lazy load refactoring engine to avoid circular imports."""
+        if self._refactoring_engine is None:
+            from velocitytree.refactoring import RefactoringRecommendationEngine
+            self._refactoring_engine = RefactoringRecommendationEngine(self.analyzer)
+        return self._refactoring_engine
         
     async def analyze_file_async(
         self, 
@@ -297,6 +307,11 @@ class RealTimeSuggestionEngine:
         
         # Generate refactoring suggestions
         suggestions.extend(self._generate_refactoring_suggestions(
+            analysis, file_path
+        ))
+        
+        # Add advanced refactoring recommendations
+        suggestions.extend(self._generate_advanced_refactoring_suggestions(
             analysis, file_path
         ))
         
@@ -646,6 +661,31 @@ class RealTimeSuggestionEngine:
         
         # Suggest consolidating similar functions
         # This would require more sophisticated analysis
+        
+        return suggestions
+    
+    def _generate_advanced_refactoring_suggestions(
+        self,
+        analysis: ModuleAnalysis,
+        file_path: Path
+    ) -> List[CodeSuggestion]:
+        """Generate advanced refactoring suggestions using the refactoring engine."""
+        suggestions = []
+        
+        try:
+            # Get refactoring recommendations
+            recommendations = self.refactoring_engine.analyze_and_recommend(
+                file_path,
+                file_path.parent  # Use parent as codebase path
+            )
+            
+            # Convert to suggestions
+            refactoring_suggestions = self.refactoring_engine.generate_suggestions(recommendations)
+            suggestions.extend(refactoring_suggestions)
+        except Exception as e:
+            # Log error but don't fail the entire analysis
+            import logging
+            logging.debug(f"Error generating advanced refactoring suggestions: {e}")
         
         return suggestions
     

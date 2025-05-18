@@ -31,6 +31,8 @@ from .models import (
     ModuleDoc,
 )
 from .templates import TemplateManager
+from .template_selector import TemplateSelector
+from .quality import DocQualityChecker, DocSuggestionEngine
 from ..utils import logger
 
 
@@ -46,6 +48,9 @@ class DocGenerator:
         self.config = config or DocConfig()
         self.analyzer = CodeAnalyzer()
         self.template_manager = TemplateManager()
+        self.template_selector = TemplateSelector(self.template_manager)
+        self.quality_checker = DocQualityChecker(self.config.style)
+        self.suggestion_engine = DocSuggestionEngine()
         self._init_formatters()
         
     def _init_formatters(self):
@@ -64,6 +69,8 @@ class DocGenerator:
         doc_type: DocType = DocType.MODULE,
         format: Optional[DocFormat] = None,
         style: Optional[DocStyle] = None,
+        template: Optional[DocTemplate] = None,
+        smart_selection: bool = True,
     ) -> DocumentationResult:
         """Generate documentation for a source.
         
@@ -72,6 +79,8 @@ class DocGenerator:
             doc_type: Type of documentation to generate
             format: Output format (uses config default if not specified)
             style: Documentation style (uses config default if not specified)
+            template: Specific template to use (overrides smart selection)
+            smart_selection: Whether to use smart template selection
             
         Returns:
             Generated documentation result
@@ -90,17 +99,47 @@ class DocGenerator:
         else:
             module_analysis = source
             
-        # Generate documentation based on type
-        if doc_type == DocType.MODULE:
-            doc_content = self._generate_module_doc(module_analysis, style)
-        elif doc_type == DocType.CLASS:
-            doc_content = self._generate_class_docs(module_analysis, style)
-        elif doc_type == DocType.FUNCTION:
-            doc_content = self._generate_function_docs(module_analysis, style)
-        elif doc_type == DocType.API:
-            doc_content = self._generate_api_doc(module_analysis, style)
+        # Store current analysis for quality checker
+        self._current_analysis = module_analysis
+            
+        # Select template if not provided
+        if template is None and smart_selection:
+            template = self.template_selector.select_template(
+                source=module_analysis,
+                doc_type=doc_type,
+                config=self.config,
+            )
+            
+            # Get suggestions for improvement
+            suggestions = self.template_selector.suggest_improvements(
+                template=template,
+                source=module_analysis,
+            )
+            if suggestions:
+                logger.info("Template selection suggestions:")
+                for suggestion in suggestions:
+                    logger.info(f"  - {suggestion}")
+            
+        # Generate documentation based on type or template
+        if template:
+            # Use template-based generation
+            doc_content = self._generate_with_template(
+                module_analysis, 
+                template,
+                style
+            )
         else:
-            raise ValueError(f"Unsupported documentation type: {doc_type}")
+            # Use default generation methods
+            if doc_type == DocType.MODULE:
+                doc_content = self._generate_module_doc(module_analysis, style)
+            elif doc_type == DocType.CLASS:
+                doc_content = self._generate_class_docs(module_analysis, style)
+            elif doc_type == DocType.FUNCTION:
+                doc_content = self._generate_function_docs(module_analysis, style)
+            elif doc_type == DocType.API:
+                doc_content = self._generate_api_doc(module_analysis, style)
+            else:
+                raise ValueError(f"Unsupported documentation type: {doc_type}")
             
         # Format the documentation
         formatter = self.formatters.get(format)
@@ -252,6 +291,123 @@ class DocGenerator:
             sections.append(classes_section)
             
         return {"sections": sections}
+        
+    def _generate_with_template(
+        self,
+        analysis: Union[ModuleAnalysis, ClassAnalysis, FunctionAnalysis],
+        template: DocTemplate,
+        style: DocStyle,
+    ) -> Dict[str, Any]:
+        """Generate documentation using a specific template.
+        
+        Args:
+            analysis: Code analysis result
+            template: Template to use
+            style: Documentation style
+            
+        Returns:
+            Generated documentation content
+        """
+        # Get context for template
+        context = self.template_selector.get_template_context(analysis, template)
+        
+        # Add style-specific formatting
+        if style == DocStyle.GOOGLE:
+            context = self._apply_google_style(context, analysis)
+        elif style == DocStyle.NUMPY:
+            context = self._apply_numpy_style(context, analysis)
+        elif style == DocStyle.SPHINX:
+            context = self._apply_sphinx_style(context, analysis)
+            
+        # Render template
+        rendered = self.template_manager.render_template(
+            template=template,
+            context=context,
+            strict=False,  # Allow missing fields
+        )
+        
+        # Return as structured content
+        return {
+            "content": rendered,
+            "template": template.name,
+            "context": context,
+        }
+        
+    def _apply_google_style(self, context: Dict[str, Any], analysis: Any) -> Dict[str, Any]:
+        """Apply Google documentation style to context.
+        
+        Args:
+            context: Template context
+            analysis: Code analysis
+            
+        Returns:
+            Updated context
+        """
+        # Format parameters for Google style
+        if 'parameters' in context and isinstance(context['parameters'], str):
+            params_list = context['parameters'].split(', ')
+            formatted_params = []
+            for param in params_list:
+                formatted_params.append(f"    {param}: Description of {param}")
+            context['parameters'] = '\n'.join(formatted_params)
+            
+        # Format returns for Google style
+        if 'returns' in context and not context['returns'].startswith('    '):
+            context['returns'] = f"    {context['returns']}"
+            
+        return context
+        
+    def _apply_numpy_style(self, context: Dict[str, Any], analysis: Any) -> Dict[str, Any]:
+        """Apply NumPy documentation style to context.
+        
+        Args:
+            context: Template context
+            analysis: Code analysis
+            
+        Returns:
+            Updated context
+        """
+        # Format parameters for NumPy style
+        if 'parameters' in context and isinstance(context['parameters'], str):
+            params_list = context['parameters'].split(', ')
+            formatted_params = []
+            formatted_params.append("----------")
+            for param in params_list:
+                formatted_params.append(f"{param} : type")
+                formatted_params.append(f"    Description of {param}")
+                formatted_params.append("")
+            context['parameters'] = '\n'.join(formatted_params)
+            
+        # Format returns for NumPy style
+        if 'returns' in context:
+            context['returns'] = f"-------\ntype\n    {context['returns']}"
+            
+        return context
+        
+    def _apply_sphinx_style(self, context: Dict[str, Any], analysis: Any) -> Dict[str, Any]:
+        """Apply Sphinx documentation style to context.
+        
+        Args:
+            context: Template context
+            analysis: Code analysis
+            
+        Returns:
+            Updated context
+        """
+        # Format parameters for Sphinx style
+        if 'parameters' in context and isinstance(context['parameters'], str):
+            params_list = context['parameters'].split(', ')
+            formatted_params = []
+            for param in params_list:
+                formatted_params.append(f":param {param}: Description of {param}")
+                formatted_params.append(f":type {param}: type")
+            context['parameters'] = '\n'.join(formatted_params)
+            
+        # Format returns for Sphinx style
+        if 'returns' in context:
+            context['returns'] = f":returns: {context['returns']}\n:rtype: type"
+            
+        return context
         
     def _format_markdown(self, content: Union[ModuleDoc, ClassDoc, FunctionDoc, Dict]) -> str:
         """Format documentation as Markdown."""
@@ -590,68 +746,16 @@ class DocGenerator:
         return attributes
         
     def _check_quality(self, content: Any, analysis: ModuleAnalysis) -> List[DocIssue]:
-        """Check documentation quality."""
-        issues = []
-        
-        # Check for missing docstrings
-        for func in analysis.functions:
-            if not func.docstring:
-                issues.append(DocIssue(
-                    severity=DocSeverity.WARNING,
-                    location=f"Function: {func.name}",
-                    message="Missing docstring",
-                    suggestion="Add a docstring describing the function's purpose",
-                ))
-                
-        for cls in analysis.classes:
-            if not cls.docstring:
-                issues.append(DocIssue(
-                    severity=DocSeverity.WARNING,
-                    location=f"Class: {cls.name}",
-                    message="Missing docstring",
-                    suggestion="Add a docstring describing the class",
-                ))
-                
-            for method in cls.methods:
-                if not method.docstring and not method.name.startswith('_'):
-                    issues.append(DocIssue(
-                        severity=DocSeverity.WARNING,
-                        location=f"Method: {cls.name}.{method.name}",
-                        message="Missing docstring",
-                        suggestion="Add a docstring describing the method",
-                    ))
-                    
-        # Check for incomplete docstrings
-        if isinstance(content, FunctionDoc):
-            if content.parameters and not all(content.parameters.values()):
-                issues.append(DocIssue(
-                    severity=DocSeverity.INFO,
-                    location=f"Function: {content.name}",
-                    message="Incomplete parameter documentation",
-                    suggestion="Document all parameters",
-                ))
-                
-        return issues
+        """Check documentation quality using quality checker."""
+        # Use the quality checker for comprehensive analysis
+        quality_report = self.quality_checker.check_quality(analysis)
+        return quality_report.issues
         
     def _calculate_quality_score(self, issues: List[DocIssue]) -> float:
         """Calculate documentation quality score."""
-        if not issues:
-            return 100.0
-            
-        # Weight by severity
-        weights = {
-            DocSeverity.ERROR: 10,
-            DocSeverity.WARNING: 5,
-            DocSeverity.INFO: 2,
-            DocSeverity.SUGGESTION: 1,
-        }
-        
-        total_penalty = sum(weights.get(issue.severity, 0) for issue in issues)
-        
-        # Cap at 0
-        score = max(0, 100 - total_penalty)
-        
-        return score
+        # Run full quality analysis to get proper scores
+        quality_report = self.quality_checker.check_quality(self._current_analysis)
+        return quality_report.overall_score
         
     def _calculate_completeness_score(self, content: Any, analysis: ModuleAnalysis) -> float:
         """Calculate documentation completeness score."""
@@ -720,3 +824,123 @@ class DocGenerator:
         """Convert content to reStructuredText."""
         # Basic implementation - would be more sophisticated in practice
         return str(content)
+        
+    def suggest_improvements(
+        self,
+        source: Union[str, Path, ModuleAnalysis],
+        doc_type: DocType = DocType.MODULE,
+    ) -> Dict[str, Any]:
+        """Suggest documentation improvements for a source.
+        
+        Args:
+            source: Source code path or analysis result
+            doc_type: Type of documentation to analyze
+            
+        Returns:
+            Dictionary with suggestions and quality metrics
+        """
+        # Get analysis if needed
+        if isinstance(source, (str, Path)):
+            module_analysis = self.analyzer.analyze_file(source)
+            if not module_analysis:
+                raise ValueError(f"Could not analyze file: {source}")
+        else:
+            module_analysis = source
+            
+        # Run quality check
+        quality_report = self.quality_checker.check_quality(module_analysis)
+        
+        # Generate specific suggestions
+        element_suggestions = {}
+        
+        # Suggest improvements for module
+        if not module_analysis.docstring:
+            element_suggestions['module'] = self.suggestion_engine.suggest_docstring(
+                module_analysis, 'module'
+            )
+            
+        # Suggest improvements for functions
+        for func in module_analysis.functions:
+            if not func.docstring:
+                element_suggestions[f'function:{func.name}'] = self.suggestion_engine.suggest_docstring(
+                    func, 'function'
+                )
+            elif quality_report.issues:
+                # Improve existing docstring
+                func_issues = [i for i in quality_report.issues if func.name in i.location]
+                if func_issues:
+                    improved = self.suggestion_engine.improve_docstring(
+                        func.docstring, func, func_issues
+                    )
+                    if improved != func.docstring:
+                        element_suggestions[f'function:{func.name}'] = improved
+                        
+        # Suggest improvements for classes
+        for cls in module_analysis.classes:
+            if not cls.docstring:
+                element_suggestions[f'class:{cls.name}'] = self.suggestion_engine.suggest_docstring(
+                    cls, 'class'
+                )
+                
+            # Check methods
+            for method in cls.methods:
+                if not method.docstring and not method.name.startswith('_'):
+                    element_suggestions[f'method:{cls.name}.{method.name}'] = self.suggestion_engine.suggest_docstring(
+                        method, 'function'
+                    )
+                    
+        return {
+            'quality_report': {
+                'overall_score': quality_report.overall_score,
+                'metric_scores': {k.value: v for k, v in quality_report.metric_scores.items()},
+                'issues': [{
+                    'severity': issue.severity.value,
+                    'location': issue.location,
+                    'message': issue.message,
+                    'category': getattr(issue, '_category', 'unknown'),
+                } for issue in quality_report.issues],
+                'suggestions': quality_report.suggestions,
+                'statistics': quality_report.statistics,
+            },
+            'element_suggestions': element_suggestions,
+            'summary': self._summarize_suggestions(quality_report, element_suggestions),
+        }
+        
+    def _summarize_suggestions(
+        self,
+        quality_report: Any,
+        element_suggestions: Dict[str, str],
+    ) -> str:
+        """Create a summary of improvement suggestions."""
+        lines = []
+        
+        # Overall score
+        lines.append(f"Documentation Quality Score: {quality_report.overall_score:.1f}/100")
+        lines.append("")
+        
+        # Critical issues
+        critical_issues = [i for i in quality_report.issues if i.severity in [DocSeverity.ERROR, DocSeverity.WARNING]]
+        if critical_issues:
+            lines.append(f"Critical Issues ({len(critical_issues)}):")
+            for issue in critical_issues[:5]:
+                lines.append(f"  • {issue.location}: {issue.message}")
+            lines.append("")
+            
+        # Missing documentation
+        missing_count = len(element_suggestions)
+        if missing_count > 0:
+            lines.append(f"Missing Documentation ({missing_count} elements):")
+            for element, suggestion in list(element_suggestions.items())[:5]:
+                element_type, name = element.split(':', 1)
+                lines.append(f"  • {element_type.capitalize()} '{name}' needs documentation")
+            if missing_count > 5:
+                lines.append(f"  ... and {missing_count - 5} more")
+            lines.append("")
+            
+        # General suggestions
+        if quality_report.suggestions:
+            lines.append("Improvement Suggestions:")
+            for suggestion in quality_report.suggestions[:5]:
+                lines.append(f"  • {suggestion}")
+                
+        return "\n".join(lines)

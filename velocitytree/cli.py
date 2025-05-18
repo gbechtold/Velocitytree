@@ -712,6 +712,185 @@ def suggest(ctx, path, watch, priority, type, output, fix):
         logger.error(f"Suggestion error: {e}", exc_info=True)
 
 
+@code.command()
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--type', '-t', type=click.Choice(['all', 'extract_method', 'extract_class', 
+                                                  'remove_dead', 'consolidate']), 
+              default='all', help='Type of refactoring to detect')
+@click.option('--output', '-o', type=click.Choice(['text', 'json']), 
+              default='text', help='Output format')
+@click.option('--threshold', '-th', type=float, default=0.7, 
+              help='Confidence threshold (0.0-1.0)')
+@click.option('--max-risk', '-r', type=float, default=0.5, 
+              help='Maximum risk score to show (0.0-1.0)')
+@click.option('--save', '-s', type=click.Path(), help='Save report to file')
+@click.pass_context
+def refactor(ctx, path, type, output, threshold, max_risk, save):
+    """Analyze code for refactoring opportunities."""
+    from pathlib import Path
+    from .refactoring import RefactoringRecommendationEngine, RefactoringType
+    import json
+    
+    path = Path(path)
+    engine = RefactoringRecommendationEngine()
+    
+    console.print(f"[blue]Analyzing {path} for refactoring opportunities...[/blue]")
+    
+    # Get recommendations
+    if path.is_file():
+        recommendations = engine.analyze_and_recommend(path)
+    else:
+        # Analyze all Python files in directory
+        recommendations = []
+        py_files = list(path.rglob("*.py"))
+        
+        for file_path in track(py_files, description="Analyzing files..."):
+            try:
+                file_recommendations = engine.analyze_and_recommend(file_path)
+                recommendations.extend(file_recommendations)
+            except Exception as e:
+                console.print(f"[yellow]Warning: Failed to analyze {file_path}: {e}[/yellow]")
+    
+    # Filter by type if specified
+    if type != 'all':
+        type_map = {
+            'extract_method': RefactoringType.EXTRACT_METHOD,
+            'extract_class': RefactoringType.EXTRACT_CLASS,
+            'remove_dead': RefactoringType.REMOVE_DEAD_CODE,
+            'consolidate': RefactoringType.CONSOLIDATE_DUPLICATE
+        }
+        filter_type = type_map.get(type)
+        recommendations = [
+            rec for rec in recommendations 
+            if rec[0].type == filter_type
+        ]
+    
+    # Filter by confidence threshold
+    recommendations = [
+        rec for rec in recommendations 
+        if rec[0].confidence >= threshold
+    ]
+    
+    # Filter by risk
+    recommendations = [
+        rec for rec in recommendations 
+        if rec[2].risk_score <= max_risk
+    ]
+    
+    # Sort by benefit/risk ratio
+    recommendations.sort(
+        key=lambda x: x[0].maintainability_improvement / (x[2].risk_score + 0.1),
+        reverse=True
+    )
+    
+    if output == 'json':
+        # Generate JSON output
+        output_data = []
+        for candidate, plan, impact in recommendations:
+            output_data.append({
+                'type': candidate.type.value,
+                'file': str(candidate.location.file_path),
+                'location': {
+                    'start': candidate.location.line_start,
+                    'end': candidate.location.line_end
+                },
+                'confidence': candidate.confidence,
+                'rationale': candidate.rationale,
+                'impact': {
+                    'risk_score': impact.risk_score,
+                    'performance': impact.performance_impact,
+                    'breaking_changes': impact.breaking_changes
+                },
+                'plan': {
+                    'steps': plan.steps,
+                    'effort': plan.estimated_effort,
+                    'benefits': plan.benefits,
+                    'risks': plan.risks
+                },
+                'improvements': {
+                    'complexity': candidate.complexity_reduction,
+                    'readability': candidate.readability_improvement,
+                    'maintainability': candidate.maintainability_improvement
+                }
+            })
+        
+        if save:
+            with open(save, 'w') as f:
+                json.dump(output_data, f, indent=2)
+            console.print(f"[green]Report saved to {save}[/green]")
+        else:
+            print(json.dumps(output_data, indent=2))
+    else:
+        # Generate text output
+        if not recommendations:
+            console.print("[yellow]No refactoring opportunities found matching criteria[/yellow]")
+            return
+        
+        console.print(f"\n[green]Found {len(recommendations)} refactoring opportunities:[/green]\n")
+        
+        for i, (candidate, plan, impact) in enumerate(recommendations[:10], 1):
+            # Display header
+            console.print(f"[bold]{i}. {candidate.type.value.replace('_', ' ').title()}[/bold]")
+            console.print(f"   File: [cyan]{candidate.location.file_path}[/cyan]")
+            console.print(f"   Lines: {candidate.location.line_start}-{candidate.location.line_end}")
+            console.print(f"   Confidence: [green]{candidate.confidence:.1%}[/green]")
+            console.print(f"   Risk: [{'red' if impact.risk_score > 0.5 else 'yellow'}]{impact.risk_score:.1%}[/]")
+            
+            # Display rationale
+            console.print(f"\n   [bold]Rationale:[/bold] {candidate.rationale}")
+            
+            # Display impact
+            console.print(f"\n   [bold]Expected Improvements:[/bold]")
+            console.print(f"   - Complexity reduction: {candidate.complexity_reduction:.1%}")
+            console.print(f"   - Readability improvement: {candidate.readability_improvement:.1%}")
+            console.print(f"   - Maintainability improvement: {candidate.maintainability_improvement:.1%}")
+            
+            # Display plan summary
+            console.print(f"\n   [bold]Plan:[/bold]")
+            for j, step in enumerate(plan.steps[:3], 1):
+                console.print(f"   {j}. {step}")
+            if len(plan.steps) > 3:
+                console.print(f"   ... ({len(plan.steps) - 3} more steps)")
+            
+            console.print(f"\n   [bold]Effort:[/bold] {plan.estimated_effort}")
+            
+            # Display risks and benefits
+            if plan.risks:
+                console.print(f"\n   [bold]Risks:[/bold]")
+                for risk in plan.risks[:2]:
+                    console.print(f"   - {risk}")
+            
+            if plan.benefits:
+                console.print(f"\n   [bold]Benefits:[/bold]")
+                for benefit in plan.benefits[:2]:
+                    console.print(f"   - {benefit}")
+            
+            console.print("\n" + "-" * 60 + "\n")
+        
+        if len(recommendations) > 10:
+            console.print(f"[dim]... and {len(recommendations) - 10} more opportunities[/dim]")
+        
+        # Summary
+        console.print("\n[bold]Summary by Type:[/bold]")
+        type_counts = {}
+        for rec in recommendations:
+            rec_type = rec[0].type.value
+            type_counts[rec_type] = type_counts.get(rec_type, 0) + 1
+        
+        for ref_type, count in sorted(type_counts.items(), key=lambda x: x[1], reverse=True):
+            console.print(f"  {ref_type.replace('_', ' ').title()}: {count}")
+        
+        # Risk summary
+        low_risk = sum(1 for r in recommendations if r[2].risk_score <= 0.3)
+        medium_risk = sum(1 for r in recommendations if 0.3 < r[2].risk_score <= 0.7)
+        high_risk = sum(1 for r in recommendations if r[2].risk_score > 0.7)
+        
+        console.print("\n[bold]Risk Assessment:[/bold]")
+        console.print(f"  Low risk: [green]{low_risk}[/green]")
+        console.print(f"  Medium risk: [yellow]{medium_risk}[/yellow]")
+        console.print(f"  High risk: [red]{high_risk}[/red]")
+
+
 @cli.group()
 def ai():
     """AI assistant commands."""

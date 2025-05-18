@@ -48,9 +48,9 @@ class ProjectProgress:
     total_features: int
     milestones_completed: int
     total_milestones: int
-    estimated_completion_date: Optional[datetime] = None
     current_velocity: float
     average_velocity: float
+    estimated_completion_date: Optional[datetime] = None
     burndown_data: List[Tuple[datetime, float]] = field(default_factory=list)
 
 

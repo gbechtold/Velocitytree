@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 
 from velocitytree.feature_graph import FeatureGraph
 from velocitytree.visualization import FeatureGraphVisualizer
-from velocitytree.core import VelocityTree
+# from velocitytree.core import VelocityTree  # Not used in this module
 from velocitytree.progress_tracking import ProgressCalculator
 
 

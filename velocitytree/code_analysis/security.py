@@ -14,7 +14,7 @@ from .models import (
     SecurityCategory,
     CodeLocation,
 )
-from .patterns import PatternRegistry, PatternDetector
+from .patterns import PatternDetectorRegistry, PatternDetector
 
 
 class VulnerabilityType(Enum):
@@ -452,7 +452,7 @@ class SecurityAnalyzer:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
         self.scanner = SecurityScanner()
-        self.pattern_registry = PatternRegistry()
+        self.pattern_registry = PatternDetectorRegistry()
         
     def analyze_file(self, file_path: Path) -> Dict[str, Any]:
         """Analyze a single file for security vulnerabilities."""
