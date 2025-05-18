@@ -192,11 +192,18 @@ class RealTimeSuggestionEngine:
         self,
         analyzer: Optional[CodeAnalyzer] = None,
         quality_checker: Optional[DocQualityChecker] = None,
-        refactoring_engine: Optional[Any] = None
+        refactoring_engine: Optional[Any] = None,
+        feedback_collector: Optional[Any] = None,
+        learning_engine: Optional[Any] = None
     ):
         self.analyzer = analyzer or CodeAnalyzer()
         self.quality_checker = quality_checker or DocQualityChecker()
+        # Refactoring engine integration with lazy loading
         self._refactoring_engine = refactoring_engine
+        # Learning system integration with lazy loading
+        self._feedback_collector = feedback_collector
+        self._learning_engine = learning_engine
+        self._adaptive_engine = None
         self.prioritizer = SuggestionPrioritizer(self.analyzer)
         self.cache: Dict[Path, Tuple[str, List[CodeSuggestion]]] = {}
         self.debounce_timers: Dict[Path, asyncio.Task] = {}
@@ -209,6 +216,22 @@ class RealTimeSuggestionEngine:
             from velocitytree.refactoring import RefactoringRecommendationEngine
             self._refactoring_engine = RefactoringRecommendationEngine(self.analyzer)
         return self._refactoring_engine
+    
+    @property
+    def feedback_collector(self):
+        """Lazy load feedback collector."""
+        if self._feedback_collector is None:
+            from velocitytree.learning.feedback_collector import FeedbackCollector
+            self._feedback_collector = FeedbackCollector()
+        return self._feedback_collector
+    
+    @property
+    def learning_engine(self):
+        """Lazy load learning engine."""
+        if self._learning_engine is None:
+            from velocitytree.learning.feedback_collector import LearningEngine
+            self._learning_engine = LearningEngine()
+        return self._learning_engine
         
     async def analyze_file_async(
         self, 
@@ -252,7 +275,9 @@ class RealTimeSuggestionEngine:
         if cache_key in self.cache:
             cached_content, cached_suggestions = self.cache[cache_key]
             if cached_content == content:
-                return cached_suggestions
+                # Apply adaptive learning to cached suggestions
+                adapted_suggestions = self._apply_adaptive_learning(cached_suggestions)
+                return adapted_suggestions
         
         # Run analysis in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
@@ -324,7 +349,10 @@ class RealTimeSuggestionEngine:
         # Sort by priority
         suggestions.sort()
         
-        return suggestions
+        # Apply adaptive learning
+        adapted_suggestions = self._apply_adaptive_learning(suggestions)
+        
+        return adapted_suggestions
     
     def _convert_issues_to_suggestions(
         self, 
@@ -688,6 +716,46 @@ class RealTimeSuggestionEngine:
             logging.debug(f"Error generating advanced refactoring suggestions: {e}")
         
         return suggestions
+    
+    def _apply_adaptive_learning(self, suggestions: List[CodeSuggestion]) -> List[CodeSuggestion]:
+        """Apply adaptive learning to adjust suggestions based on user preferences."""
+        if not self._learning_engine:
+            return suggestions
+        
+        adapted_suggestions = []
+        from velocitytree.learning.feedback_collector import AdaptiveSuggestionEngine
+        adaptive_engine = AdaptiveSuggestionEngine(self.learning_engine)
+        
+        for suggestion in suggestions:
+            # Get confidence adjustment from learning engine
+            confidence_adjustment = self.learning_engine.get_pattern_confidence(
+                suggestion.type.value,
+                suggestion.priority / 100.0  # Normalize priority to 0-1 range
+            )
+            
+            # Create adjusted suggestion with new priority
+            adjusted_suggestion = CodeSuggestion(
+                type=suggestion.type,
+                severity=suggestion.severity,
+                message=suggestion.message,
+                range=suggestion.range,
+                file_path=suggestion.file_path,
+                quick_fixes=suggestion.quick_fixes,
+                metadata=suggestion.metadata,
+                priority=int(confidence_adjustment * 100)  # Convert back to priority scale
+            )
+            
+            # Check if this suggestion type should be filtered based on user preferences
+            user_preferences = getattr(self.learning_engine, 'get_user_preferences', lambda: {})() or {}
+            if suggestion.type.value in user_preferences.get('filtered_types', []):
+                continue
+            
+            adapted_suggestions.append(adjusted_suggestion)
+        
+        # Re-sort by adjusted priority
+        adapted_suggestions.sort()
+        
+        return adapted_suggestions
     
     def clear_cache(self, file_path: Optional[Path] = None):
         """Clear suggestion cache."""

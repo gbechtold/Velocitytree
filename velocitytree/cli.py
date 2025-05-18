@@ -28,6 +28,23 @@ from .progress_tracking import ProgressCalculator
 console = Console()
 
 
+def get_suggestion_engine(ctx):
+    """Get or create a suggestion engine instance."""
+    if 'suggestion_engine' not in ctx.obj:
+        from .realtime_suggestions import RealTimeSuggestionEngine
+        from .code_analysis.analyzer import CodeAnalyzer
+        from .documentation.quality import DocQualityChecker
+        
+        analyzer = CodeAnalyzer()
+        quality_checker = DocQualityChecker()
+        ctx.obj['suggestion_engine'] = RealTimeSuggestionEngine(
+            analyzer=analyzer,
+            quality_checker=quality_checker
+        )
+    
+    return ctx.obj['suggestion_engine']
+
+
 @click.group()
 @click.option('--config', '-c', type=click.Path(exists=True), help='Config file path')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')
@@ -1602,6 +1619,289 @@ def suggest_relationships(ctx, project):
 def progress():
     """Progress tracking and velocity commands."""
     pass
+
+
+@cli.group()
+def suggestions():
+    """Real-time code suggestions commands."""
+    pass
+
+
+@suggestions.command('realtime')
+@click.argument('file_path', type=click.Path(exists=True))
+@click.option(
+    '--batch', 
+    is_flag=True, 
+    help='Process multiple files in batch mode'
+)
+@click.option(
+    '--interactive', 
+    is_flag=True, 
+    help='Enable interactive analysis session'
+)
+@click.option(
+    '--context', 
+    multiple=True, 
+    help='Additional context for analysis (key=value pairs)'
+)
+@click.option(
+    '--output', 
+    type=click.Path(), 
+    help='Save suggestions to file'
+)
+@click.option(
+    '--feedback', 
+    is_flag=True, 
+    help='Show feedback prompts for suggestions'
+)
+@click.option(
+    '--no-cache', 
+    is_flag=True, 
+    help='Disable suggestion caching'
+)
+@click.pass_context
+def suggestions_realtime(ctx, file_path, batch, interactive, context, output, feedback, no_cache):
+    """Get real-time code suggestions for a file or directory."""
+    from pathlib import Path
+    import json
+    from .realtime_suggestions import RealTimeSuggestionEngine
+    from .code_analysis.analyzer import CodeAnalyzer
+    from .documentation.quality import DocQualityChecker
+    
+    # Create suggestion engine
+    analyzer = CodeAnalyzer()
+    quality_checker = DocQualityChecker()
+    suggestion_engine = RealTimeSuggestionEngine(
+        analyzer=analyzer,
+        quality_checker=quality_checker
+    )
+    
+    # Set up feedback collection if requested
+    feedback_collector = None
+    if feedback:
+        from velocitytree.learning.feedback_collector import FeedbackCollector
+        feedback_collector = FeedbackCollector()
+        suggestion_engine._feedback_collector = feedback_collector
+    
+    # Override cache behavior if requested
+    if no_cache:
+        suggestion_engine.clear_cache()
+    
+    # Parse context
+    context_dict = {}
+    for ctx_pair in context:
+        if '=' in ctx_pair:
+            key, value = ctx_pair.split('=', 1)
+            context_dict[key] = value
+    
+    # Determine files to analyze
+    path = Path(file_path)
+    if path.is_dir():
+        files = list(path.glob("**/*.py"))
+    else:
+        files = [path]
+    
+    if batch:
+        # Batch processing
+        console.print(f"[blue]Batch analyzing {len(files)} files...[/blue]")
+        all_suggestions = {}
+        
+        with Progress() as progress:
+            task = progress.add_task("Analyzing files...", total=len(files))
+            
+            for file_path in files:
+                try:
+                    suggestions = suggestion_engine._analyze_sync(
+                        file_path, 
+                        file_path.read_text(),
+                        context_dict
+                    )
+                    if suggestions:
+                        all_suggestions[str(file_path)] = suggestions
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Failed to analyze {file_path}: {e}[/yellow]")
+                progress.advance(task)
+        
+        # Save or display results
+        if output:
+            output_data = {
+                str(path): [
+                    {
+                        'type': s.type.value,
+                        'severity': s.severity.value,
+                        'message': s.message,
+                        'line': s.range.start.line,
+                        'priority': s.priority
+                    }
+                    for s in suggestions
+                ]
+                for path, suggestions in all_suggestions.items()
+            }
+            
+            with open(output, 'w') as f:
+                json.dump(output_data, f, indent=2)
+            console.print(f"[green]Results saved to: {output}[/green]")
+        else:
+            # Display summary
+            total_suggestions = sum(len(s) for s in all_suggestions.values())
+            console.print(f"\n[green]Analysis complete:[/green] {total_suggestions} suggestions in {len(all_suggestions)} files")
+            
+            for file_path, suggestions in all_suggestions.items():
+                console.print(f"\n[blue]{file_path}:[/blue] {len(suggestions)} suggestions")
+                for suggestion in suggestions[:3]:  # Show first 3
+                    console.print(f"  • {suggestion.type.value}: {suggestion.message}")
+                if len(suggestions) > 3:
+                    console.print(f"  ... and {len(suggestions) - 3} more")
+    
+    elif interactive:
+        # Interactive analysis session
+        from prompt_toolkit import prompt as pt_prompt
+        from prompt_toolkit.history import InMemoryHistory
+        
+        console.print(f"[blue]Starting interactive analysis session for {file_path}[/blue]")
+        console.print("[dim]Type 'help' for commands, 'quit' to exit[/dim]\n")
+        
+        history = InMemoryHistory()
+        
+        while True:
+            try:
+                command = pt_prompt("> ", history=history)
+                
+                if command.lower() in ['quit', 'exit']:
+                    break
+                elif command.lower() == 'help':
+                    console.print("Commands:")
+                    console.print("  analyze - Re-analyze the file")
+                    console.print("  feedback <suggestion_id> <rating> - Provide feedback")
+                    console.print("  apply <suggestion_id> - Apply a quick fix")
+                    console.print("  filter <type> - Filter by suggestion type")
+                    console.print("  quit - Exit interactive session")
+                elif command.lower().startswith('analyze'):
+                    suggestions = suggestion_engine._analyze_sync(
+                        path,
+                        path.read_text(),
+                        context_dict
+                    )
+                    console.print(f"Found {len(suggestions)} suggestions")
+                    for i, suggestion in enumerate(suggestions):
+                        console.print(f"{i}: {suggestion.type.value} - {suggestion.message}")
+                elif command.lower().startswith('feedback'):
+                    if feedback:
+                        parts = command.split()
+                        if len(parts) >= 3:
+                            suggestion_id = int(parts[1])
+                            rating = parts[2]
+                            # Process feedback
+                            feedback_collector.record_feedback(
+                                suggestion_id=str(suggestion_id),
+                                feedback_type='rating',
+                                value=rating
+                            )
+                            console.print("[green]Feedback recorded[/green]")
+                    else:
+                        console.print("[yellow]Feedback collection not enabled[/yellow]")
+                
+            except KeyboardInterrupt:
+                continue
+            except EOFError:
+                break
+            except Exception as e:
+                console.print(f"[red]Error:[/red] {str(e)}")
+        
+        console.print("\n[yellow]Interactive session ended[/yellow]")
+    
+    else:
+        # Single file analysis
+        console.print(f"[blue]Analyzing {file_path}...[/blue]")
+        
+        try:
+            suggestions = suggestion_engine._analyze_sync(
+                path,
+                path.read_text(),
+                context_dict
+            )
+            
+            if not suggestions:
+                console.print("[green]No suggestions found[/green]")
+                return
+            
+            console.print(f"\n[green]Found {len(suggestions)} suggestions:[/green]")
+            
+            for i, suggestion in enumerate(suggestions):
+                # Display suggestion
+                console.print(f"\n[bold]{i + 1}. {suggestion.type.value.replace('_', ' ').title()}[/bold]")
+                console.print(f"   Severity: [yellow]{suggestion.severity.value}[/yellow]")
+                console.print(f"   Priority: {suggestion.priority}")
+                console.print(f"   Message: {suggestion.message}")
+                console.print(f"   Location: Line {suggestion.range.start.line}")
+                
+                if suggestion.quick_fixes:
+                    console.print("   Quick fixes:")
+                    for fix in suggestion.quick_fixes:
+                        console.print(f"     • {fix.title}: {fix.description}")
+                
+                # Collect feedback if enabled
+                if feedback and feedback_collector:
+                    from rich.prompt import Confirm, Prompt
+                    
+                    if Confirm.ask("Was this suggestion helpful?"):
+                        rating = Prompt.ask(
+                            "Rate this suggestion (1-5)",
+                            choices=["1", "2", "3", "4", "5"]
+                        )
+                        
+                        feedback_collector.record_feedback(
+                            suggestion_id=f"{file_path}_{i}",
+                            feedback_type='rating',
+                            value=int(rating),
+                            metadata={
+                                'suggestion_type': suggestion.type.value,
+                                'severity': suggestion.severity.value,
+                                'file_path': str(file_path)
+                            }
+                        )
+                        
+                        console.print("[green]Thank you for your feedback![/green]")
+                    
+                    # Ask for additional feedback
+                    if i == 0:  # Only ask once
+                        comment = Prompt.ask("Any additional comments? (press Enter to skip)")
+                        if comment:
+                            feedback_collector.record_feedback(
+                                suggestion_id=f"{file_path}_general",
+                                feedback_type='comment',
+                                value=comment,
+                                metadata={'file_path': str(file_path)}
+                            )
+            
+            # Save to file if requested
+            if output:
+                output_data = [
+                    {
+                        'type': s.type.value,
+                        'severity': s.severity.value,
+                        'message': s.message,
+                        'line': s.range.start.line,
+                        'priority': s.priority,
+                        'quick_fixes': [
+                            {
+                                'type': f.type.value,
+                                'title': f.title,
+                                'description': f.description
+                            }
+                            for f in s.quick_fixes
+                        ]
+                    }
+                    for s in suggestions
+                ]
+                
+                with open(output, 'w') as f:
+                    json.dump(output_data, f, indent=2)
+                console.print(f"\n[green]Suggestions saved to: {output}[/green]")
+        
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {str(e)}")
+            logger.error(f"Analysis error: {e}", exc_info=True)
 
 
 @progress.command('status')

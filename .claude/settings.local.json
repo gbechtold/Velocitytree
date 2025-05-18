@@ -25,7 +25,10 @@
       "Bash(/Users/guntrambechtold/Documents/Projects/BusinessProjects/Velocitytree/venv/bin/pip install -e . --force-reinstall)",
       "Bash(/Users/guntrambechtold/Documents/Projects/BusinessProjects/Velocitytree/venv/bin/arboretum --help)",
       "Bash(mkdir:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git reset:*)",
+      "Bash(rm:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }
