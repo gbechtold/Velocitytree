@@ -34,8 +34,8 @@ class FlattenConfig(BaseModel):
 
 class AIConfig(BaseModel):
     """AI integration configuration."""
-    provider: str = Field(default="openai")
-    model: str = Field(default="gpt-4")
+    provider: str = Field(default="anthropic")
+    model: str = Field(default="claude-3-opus-20240229")
     api_key: Optional[str] = None
     temperature: float = Field(default=0.7)
     max_tokens: int = Field(default=2000)

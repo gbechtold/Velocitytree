@@ -273,5 +273,70 @@ print(f"Virtual memory: {memory_info.vms / 1024 / 1024:.2f} MB")
                 "continue_on_error": True
             }
         ]
+    },
+    
+    "blog_post": {
+        "name": "Blog Post Creator",
+        "description": "Create professional blog posts with AI assistance",
+        "tags": ["content", "writing", "ai"],
+        "steps": [
+            {
+                "name": "Setup",
+                "type": "command",
+                "command": "mkdir -p blog_posts",
+                "description": "Create output directory"
+            },
+            {
+                "name": "Get Topic",
+                "type": "python",
+                "command": """
+topic = input("\\n📝 Enter your blog post topic: ")
+context.set_var('topic', topic)
+print(f"\\n✅ Topic set: {topic}")
+"""
+            },
+            {
+                "name": "Research",
+                "type": "velocitytree",
+                "command": "ai",
+                "args": {
+                    "method": "suggest",
+                    "prompt": "Research key points and create an outline for a blog post about: {{vars.topic}}"
+                }
+            },
+            {
+                "name": "Generate Draft",
+                "type": "velocitytree",
+                "command": "ai",
+                "args": {
+                    "method": "generate",
+                    "prompt": "Write a comprehensive blog post based on this outline:\\n\\n{{step_2.output}}\\n\\nTopic: {{vars.topic}}"
+                }
+            },
+            {
+                "name": "Save Draft",
+                "type": "python",
+                "command": """
+import re
+from datetime import datetime
+
+# Clean topic for filename
+filename = re.sub(r'[^a-zA-Z0-9\\s-]', '', context.get_var('topic'))
+filename = re.sub(r'\\s+', '-', filename.lower())
+filename = f"{datetime.now().strftime('%Y%m%d')}_{filename}.md"
+
+# Save the blog post
+with open(f'blog_posts/{filename}', 'w') as f:
+    f.write(context.get_step_output('step_3'))
+
+print(f"\\n✅ Blog post saved to: blog_posts/{filename}")
+"""
+            },
+            {
+                "name": "Summary",
+                "type": "command",
+                "command": "echo '\\n🎉 Blog post created successfully!'"
+            }
+        ]
     }
 }
