@@ -30,12 +30,17 @@ from .workflows import WorkflowManager
 from .ai import AIAssistant
 from .core import TreeFlattener, ContextManager
 from .utils import logger
+from .improved_onboarding import BetterOnboardingWizard
 
 console = Console()
 
 
-class OnboardingWizard:
-    """Interactive onboarding wizard for new users."""
+# Use the improved implementation directly
+OnboardingWizard = BetterOnboardingWizard
+
+# Keep original class for backwards compatibility but use new implementation
+class OriginalOnboardingWizard:
+    """Original onboarding wizard - kept for reference."""
     
     def __init__(self, config: Config):
         self.config = config
