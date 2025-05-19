@@ -2548,28 +2548,32 @@ def workflow():
 @click.pass_context
 def list_workflows(ctx):
     """List available workflows."""
-    manager = WorkflowManager(config=ctx.obj['config'])
-    workflows = manager.list_workflows()
-    
-    if not workflows:
-        console.print("[yellow]No workflows found.[/yellow]")
-        return
-    
-    table = Table(title="Available Workflows")
-    table.add_column("Name", style="cyan")
-    table.add_column("Description", style="yellow")
-    table.add_column("Steps", style="green")
-    table.add_column("Source", style="blue")
-    
-    for workflow in workflows:
-        table.add_row(
-            workflow['name'],
-            workflow['description'][:50] + "..." if len(workflow['description']) > 50 else workflow['description'],
-            str(workflow['steps']),
-            workflow['source']
-        )
-    
-    console.print(table)
+    try:
+        manager = WorkflowManager(config=ctx.obj['config'])
+        workflows = manager.list_workflows()
+        
+        if not workflows:
+            console.print("[yellow]No workflows found.[/yellow]")
+            return
+        
+        table = Table(title="Available Workflows")
+        table.add_column("Name", style="cyan")
+        table.add_column("Description", style="yellow")
+        table.add_column("Steps", style="green")
+        table.add_column("Source", style="blue")
+        
+        for workflow in workflows:
+            table.add_row(
+                workflow['name'],
+                workflow['description'][:50] + "..." if len(workflow['description']) > 50 else workflow['description'],
+                str(workflow['steps']),
+                workflow['source']
+            )
+        
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.error(f"Error listing workflows: {e}", exc_info=True)
 
 @workflow.command('templates')
 @click.pass_context
@@ -2635,7 +2639,7 @@ def create(ctx, name, template, edit):
             console.print(f"Edit manually: {workflow_file}")
 
 @workflow.command()
-@click.argument('name')
+@click.argument('name', nargs=-1, required=True)
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed output')
 @click.option('--dry-run', is_flag=True, help='Show what would be done without executing')
 @click.option('--var', '-V', multiple=True, help='Set a global variable (format: key=value)')
@@ -2643,6 +2647,8 @@ def create(ctx, name, template, edit):
 @click.pass_context
 def run(ctx, name, verbose, dry_run, var, var_file):
     """Run a workflow."""
+    # Join name parts to support workflow names with spaces
+    workflow_name = ' '.join(name)
     manager = WorkflowManager(config=ctx.obj['config'])
     
     # Parse global variables
@@ -2668,12 +2674,12 @@ def run(ctx, name, verbose, dry_run, var, var_file):
     
     try:
         if dry_run:
-            workflow = manager.get_workflow(name)
+            workflow = manager.get_workflow(workflow_name)
             if not workflow:
-                console.print(f"[red]Workflow not found:[/red] {name}")
+                console.print(f"[red]Workflow not found:[/red] {workflow_name}")
                 return
             
-            console.print(f"[blue]Would run workflow:[/blue] {name}")
+            console.print(f"[blue]Would run workflow:[/blue] {workflow_name}")
             console.print(f"[blue]Description:[/blue] {workflow.description}")
             console.print(f"[blue]Steps:[/blue]")
             
@@ -2681,8 +2687,8 @@ def run(ctx, name, verbose, dry_run, var, var_file):
                 console.print(f"  {i+1}. {step.name} ({step.type})")
             return
         
-        with console.status(f"Running workflow '{name}'...") as status:
-            result = manager.run_workflow(name, global_vars=global_vars)
+        with console.status(f"Running workflow '{workflow_name}'...") as status:
+            result = manager.run_workflow(workflow_name, global_vars=global_vars)
             
         if result['status'] == 'success':
             console.print(f"[green]✓[/green] Workflow completed successfully")

@@ -411,7 +411,14 @@ class WorkflowManager:
         
         # Load workflows from config
         self.workflows = {}
-        for name, workflow_config in config.config.workflows.items():
+        workflows_config = config.config.workflows if hasattr(config.config, 'workflows') else {}
+        
+        # Ensure workflows is a dictionary, not a boolean or other type
+        if not isinstance(workflows_config, dict):
+            logger.warning(f"Workflows config is not a dictionary: {type(workflows_config)}")
+            workflows_config = {}
+        
+        for name, workflow_config in workflows_config.items():
             self.workflows[name] = Workflow(name, workflow_config)
         
         # Load custom workflows from directory
